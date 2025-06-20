@@ -9,6 +9,7 @@ import SearchModal from './components/SearchModal'
 import type { YouTubePlayerInstance } from './utils/youtubePlayer'
 import { parseLRC, getCurrentLyricIndex, type LyricLine } from './utils/lrcParser'
 import { RICK_ASTLEY_LRC } from './data/sampleLyrics'
+import { lyricsService } from './services/lyricsService'
 
 function App() {
   const [currentVideo, setCurrentVideo] = useState('dQw4w9WgXcQ')
@@ -20,17 +21,66 @@ function App() {
   const [currentLyricIndex, setCurrentLyricIndex] = useState(-1)
   const [currentLyrics, setCurrentLyrics] = useState("Click play to start...")
   const [typedText, setTypedText] = useState('')
+  const [isPlayerReady, setIsPlayerReady] = useState(false)
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false)
+  const [lyricsError, setLyricsError] = useState<string | null>(null)
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const lyrics = parseLRC(RICK_ASTLEY_LRC)
-    setLyricsData(lyrics)
+    fetchLyrics()
   }, [])
 
+  const fetchLyrics = async () => {
+    setIsLoadingLyrics(true)
+    setLyricsError(null)
+    
+    try {
+      console.log('Fetching lyrics for Never Gonna Give You Up...')
+      const lrcLyrics = await lyricsService.getLrcFormatLyrics({
+        trackName: 'Never Gonna Give You Up',
+        artistName: 'Rick Astley'
+      })
+      
+      if (lrcLyrics) {
+        console.log('Fetched lyrics from API:')
+        console.log(lrcLyrics.slice(0, 200) + '...') // Log first 200 chars
+        const lyrics = parseLRC(lrcLyrics)
+        console.log('Parsed lyrics:', lyrics.length, 'lines')
+        setLyricsData(lyrics)
+        setCurrentLyrics('Play the video to start typing!')
+      } else {
+        console.warn('No lyrics found, using fallback')
+        setLyricsError('No lyrics found for this song')
+        // Fallback to sample lyrics
+        const lyrics = parseLRC(RICK_ASTLEY_LRC)
+        setLyricsData(lyrics)
+        setCurrentLyrics('Using sample lyrics - Play to start!')
+      }
+    } catch (error) {
+      console.error('Error fetching lyrics:', error)
+      setLyricsError('Failed to load lyrics')
+      // Fallback to sample lyrics
+      const lyrics = parseLRC(RICK_ASTLEY_LRC)
+      setLyricsData(lyrics)
+      setCurrentLyrics('Using sample lyrics - Play to start!')
+    } finally {
+      setIsLoadingLyrics(false)
+    }
+  }
+
+  // Start sync when both player and lyrics are ready
+  useEffect(() => {
+    if (isPlayerReady && lyricsData.length > 0) {
+      console.log('Both player and lyrics ready, starting sync')
+      startLyricSync()
+    }
+  }, [isPlayerReady, lyricsData])
+
   const handlePlayerReady = (player: YouTubePlayerInstance) => {
+    console.log('YouTube player ready!')
     playerRef.current = player
-    startLyricSync()
+    setIsPlayerReady(true)
   }
 
   const startLyricSync = () => {
@@ -38,12 +88,20 @@ function App() {
       window.clearInterval(syncIntervalRef.current)
     }
 
+    console.log('Starting lyrics sync, lyrics data:', lyricsData)
+
     syncIntervalRef.current = window.setInterval(() => {
       if (playerRef.current && lyricsData.length > 0) {
         const currentTime = playerRef.current.getCurrentTime()
         const newIndex = getCurrentLyricIndex(lyricsData, currentTime)
         
+        // Log every second to avoid spam
+        if (Math.floor(currentTime) % 5 === 0 && Math.floor(currentTime * 10) % 10 === 0) {
+          console.log(`Player time: ${currentTime.toFixed(2)}s, Current lyric index: ${newIndex}`)
+        }
+        
         if (newIndex !== currentLyricIndex && newIndex >= 0) {
+          console.log(`Changing lyric! Time: ${currentTime.toFixed(2)}s, New lyric: "${lyricsData[newIndex].text}"`)
           setCurrentLyricIndex(newIndex)
           setCurrentLyrics(lyricsData[newIndex].text)
           setTypedText('')
@@ -57,6 +115,11 @@ function App() {
     setWpm(0)
     setAccuracy(100)
     setTime(0)
+  }
+
+  const handleRefreshLyrics = () => {
+    lyricsService.clearCache()
+    fetchLyrics()
   }
 
   useEffect(() => {
@@ -77,10 +140,22 @@ function App() {
           
           <StatsBar wpm={wpm} accuracy={accuracy} time={time} />
           
-          <LyricsDisplay 
-            lyrics={currentLyrics} 
-            typedText={typedText} 
-          />
+          <div className="space-y-2">
+            {isLoadingLyrics && (
+              <div className="text-center text-blue-600">
+                Loading lyrics from lrclib.net...
+              </div>
+            )}
+            {lyricsError && (
+              <div className="text-center text-amber-600 text-sm">
+                {lyricsError} - Using sample lyrics as fallback
+              </div>
+            )}
+            <LyricsDisplay 
+              lyrics={currentLyrics} 
+              typedText={typedText} 
+            />
+          </div>
           
           <TypingInput 
             targetText={currentLyrics}
@@ -96,6 +171,8 @@ function App() {
           <ActionButtons 
             onReset={handleReset}
             onSearchOpen={() => setIsSearchOpen(true)}
+            onRefreshLyrics={handleRefreshLyrics}
+            isLoadingLyrics={isLoadingLyrics}
           />
         </div>
       </main>

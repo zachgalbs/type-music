@@ -1,71 +1,153 @@
+declare global {
+  interface Window {
+    YT: typeof YT;
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
+
 export interface YouTubePlayerInstance {
   getCurrentTime(): number;
   getPlayerState(): number;
   playVideo(): void;
   pauseVideo(): void;
+  seekTo(seconds: number, allowSeekAhead?: boolean): void;
+  getDuration(): number;
+  getVolume(): number;
+  setVolume(volume: number): void;
 }
 
+interface YouTubePlayerOptions {
+  videoId: string;
+  onReady?: (player: YouTubePlayerInstance) => void;
+  onStateChange?: (state: number) => void;
+  onError?: (error: number) => void;
+}
+
+export const PlayerState = {
+  UNSTARTED: -1,
+  ENDED: 0,
+  PLAYING: 1,
+  PAUSED: 2,
+  BUFFERING: 3,
+  CUED: 5
+} as const;
+
 export class YouTubePlayerManager {
-  private player: YouTubePlayerInstance | null = null
-  private messageListener: ((event: MessageEvent) => void) | null = null
-  private onPlayerReady: (player: YouTubePlayerInstance) => void
+  private player: YT.Player | null = null;
+  private isAPIReady = false;
+  private isPlayerReady = false;
+  private pendingInit: (() => void) | null = null;
+  private pendingVideoId: string | null = null;
+  private options: YouTubePlayerOptions;
+  private containerId: string;
 
-  constructor(onPlayerReady: (player: YouTubePlayerInstance) => void) {
-    this.onPlayerReady = onPlayerReady
+  constructor(containerId: string, options: YouTubePlayerOptions) {
+    this.containerId = containerId;
+    this.options = options;
+    this.initializeAPI();
   }
 
-  initPlayer(_iframe: HTMLIFrameElement) {
-
-    // Listen for messages from YouTube iframe
-    this.messageListener = (event: MessageEvent) => {
-      if (event.origin !== 'https://www.youtube.com') return
-      
-      if (event.data && typeof event.data === 'string') {
-        try {
-          const data = JSON.parse(event.data)
-          if (data.event === 'video-progress' && data.info) {
-            // YouTube sends progress updates
-          }
-        } catch (e) {
-          // Ignore parsing errors
+  private initializeAPI() {
+    if (window.YT && window.YT.Player) {
+      this.isAPIReady = true;
+      if (this.pendingInit) {
+        this.pendingInit();
+        this.pendingInit = null;
+      }
+    } else {
+      window.onYouTubeIframeAPIReady = () => {
+        this.isAPIReady = true;
+        if (this.pendingInit) {
+          this.pendingInit();
+          this.pendingInit = null;
         }
-      }
+      };
     }
-
-    window.addEventListener('message', this.messageListener)
-
-    // Create a mock player for now since we can't directly access YouTube's API without additional setup
-    this.player = this.createMockPlayer()
-    this.onPlayerReady(this.player)
   }
 
-  private createMockPlayer(): YouTubePlayerInstance {
-    let currentTime = 0
-    let isPlaying = false
-    
-    // Start a timer to simulate video progress
-    window.setInterval(() => {
-      if (isPlaying) {
-        currentTime += 0.1
+  initPlayer() {
+    const init = () => {
+      if (!document.getElementById(this.containerId)) {
+        console.error(`Container element with id "${this.containerId}" not found`);
+        return;
       }
-    }, 100)
 
-    return {
-      getCurrentTime: () => currentTime,
-      getPlayerState: () => isPlaying ? 1 : 2, // 1 = playing, 2 = paused
-      playVideo: () => { isPlaying = true },
-      pauseVideo: () => { isPlaying = false }
+      this.player = new window.YT.Player(this.containerId, {
+        videoId: this.options.videoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 1,
+          rel: 0,
+          modestbranding: 1,
+          origin: window.location.origin
+        },
+        events: {
+          onReady: (event: YT.PlayerEvent) => {
+            this.isPlayerReady = true;
+            const ytPlayer = event.target;
+            
+            // If there's a pending video to load, load it now
+            if (this.pendingVideoId) {
+              ytPlayer.loadVideoById(this.pendingVideoId);
+              this.pendingVideoId = null;
+            }
+            
+            const playerInstance: YouTubePlayerInstance = {
+              getCurrentTime: () => ytPlayer.getCurrentTime(),
+              getPlayerState: () => ytPlayer.getPlayerState(),
+              playVideo: () => ytPlayer.playVideo(),
+              pauseVideo: () => ytPlayer.pauseVideo(),
+              seekTo: (seconds: number, allowSeekAhead?: boolean) => 
+                ytPlayer.seekTo(seconds, allowSeekAhead ?? true),
+              getDuration: () => ytPlayer.getDuration(),
+              getVolume: () => ytPlayer.getVolume(),
+              setVolume: (volume: number) => ytPlayer.setVolume(volume)
+            };
+            
+            if (this.options.onReady) {
+              this.options.onReady(playerInstance);
+            }
+          },
+          onStateChange: (event: YT.OnStateChangeEvent) => {
+            if (this.options.onStateChange) {
+              this.options.onStateChange(event.data);
+            }
+          },
+          onError: (event: YT.OnErrorEvent) => {
+            if (this.options.onError) {
+              this.options.onError(event.data);
+            }
+          }
+        }
+      });
+    };
+
+    if (this.isAPIReady) {
+      init();
+    } else {
+      this.pendingInit = init;
+    }
+  }
+
+  loadVideoById(videoId: string) {
+    if (this.player && this.isPlayerReady) {
+      this.player.loadVideoById(videoId);
+    } else {
+      // Store the video ID to load when player is ready
+      this.pendingVideoId = videoId;
     }
   }
 
   destroy() {
-    if (this.messageListener) {
-      window.removeEventListener('message', this.messageListener)
+    if (this.player) {
+      this.player.destroy();
+      this.player = null;
     }
-    this.player = null
+    this.isPlayerReady = false;
+    this.pendingVideoId = null;
   }
 
-  getPlayer(): YouTubePlayerInstance | null {
-    return this.player
+  getPlayer(): YT.Player | null {
+    return this.player;
   }
 }

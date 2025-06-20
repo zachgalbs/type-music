@@ -1,3 +1,13 @@
+// To add real song lyrics:
+// 1. Find the lyrics with timestamps from a source like:
+//    - LRC lyrics databases
+//    - Create your own by timing the lyrics with the video
+// 2. Replace the sample lyrics below with the real ones
+// 3. Make sure the timestamps match when the lyrics are sung in the video
+
+// Format: [MM:SS.XX]Lyric line
+// Example: [00:17.20]First line of the song
+
 export const RICK_ASTLEY_LRC = `[00:00.00]
 [00:17.20]Sample text for typing practice
 [00:21.36]This is a demonstration line
