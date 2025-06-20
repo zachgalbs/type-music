@@ -26,14 +26,19 @@ function App() {
   const [lyricsError, setLyricsError] = useState<string | null>(null)
   const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
   const [playerState, setPlayerState] = useState(-1)
+  const playbackRate = 0.8
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
+  const lyricStartTime = useRef<number | null>(null)
+  const pauseTimeoutRef = useRef<number | null>(null)
+  const typedTextRef = useRef<string>('')
 
-  // Debug: Track typedText changes
+  // Debug: Track typedText changes and keep ref updated
   useEffect(() => {
     console.log('typedText changed to:', `"${typedText}"`, 'Stack trace:')
     console.trace()
+    typedTextRef.current = typedText
   }, [typedText])
 
   // Check if user has caught up and resume video if needed
@@ -42,6 +47,11 @@ function App() {
       console.log('User caught up! Resuming video')
       playerRef.current.playVideo()
       setIsWaitingForTyping(false)
+      // Clear any pending pause timeout
+      if (pauseTimeoutRef.current) {
+        window.clearTimeout(pauseTimeoutRef.current)
+        pauseTimeoutRef.current = null
+      }
     }
   }, [typedText, currentLyrics, isWaitingForTyping])
 
@@ -63,7 +73,7 @@ function App() {
       if (lrcLyrics) {
         console.log('Fetched lyrics from API:')
         console.log(lrcLyrics.slice(0, 200) + '...') // Log first 200 chars
-        const lyrics = parseLRC(lrcLyrics)
+        const lyrics = parseLRC(lrcLyrics, playbackRate)
         console.log('Parsed lyrics:', lyrics.length, 'lines')
         setLyricsData(lyrics)
         setCurrentLyrics('Play the video to start typing!')
@@ -71,7 +81,7 @@ function App() {
         console.warn('No lyrics found, using fallback')
         setLyricsError('No lyrics found for this song')
         // Fallback to sample lyrics
-        const lyrics = parseLRC(RICK_ASTLEY_LRC)
+        const lyrics = parseLRC(RICK_ASTLEY_LRC, playbackRate)
         setLyricsData(lyrics)
         setCurrentLyrics('Using sample lyrics - Play to start!')
       }
@@ -79,7 +89,7 @@ function App() {
       console.error('Error fetching lyrics:', error)
       setLyricsError('Failed to load lyrics')
       // Fallback to sample lyrics
-      const lyrics = parseLRC(RICK_ASTLEY_LRC)
+      const lyrics = parseLRC(RICK_ASTLEY_LRC, playbackRate)
       setLyricsData(lyrics)
       setCurrentLyrics('Using sample lyrics - Play to start!')
     } finally {
@@ -98,6 +108,11 @@ function App() {
   const handlePlayerReady = (player: YouTubePlayerInstance) => {
     console.log('YouTube player ready!')
     playerRef.current = player
+    
+    // Set playback rate to 0.8x for slower practice
+    player.setPlaybackRate(playbackRate)
+    console.log(`Set playback rate to ${playbackRate}x`)
+    
     setIsPlayerReady(true)
   }
 
@@ -129,7 +144,16 @@ function App() {
           console.log(`Time for new lyric! Time: ${currentTime.toFixed(2)}s, New lyric: "${lyricsData[newIndex].text}"`)
           
           // Check if user hasn't finished typing the current lyric
-          if (currentLyricIndex >= 0 && typedText !== currentLyrics && typedText.length > 0) {
+          const currentTypedText = typedTextRef.current
+          console.log('Checking if user finished typing:')
+          console.log('  currentLyricIndex:', currentLyricIndex)
+          console.log('  typedText (state):', `"${typedText}"`)
+          console.log('  typedText (ref):', `"${currentTypedText}"`)
+          console.log('  currentLyrics:', `"${currentLyrics}"`)
+          console.log('  ref === currentLyrics:', currentTypedText === currentLyrics)
+          console.log('  ref.length:', currentTypedText.length)
+          
+          if (currentLyricIndex >= 0 && currentTypedText !== currentLyrics && currentTypedText.length > 0) {
             console.log('User hasn\'t finished typing current lyric, stopping video')
             playerRef.current.pauseVideo()
             setIsWaitingForTyping(true)
@@ -143,10 +167,33 @@ function App() {
           setCurrentLyricIndex(newIndex)
           setCurrentLyrics(lyricsData[newIndex].text)
           lastProcessedIndex.current = newIndex
+          lyricStartTime.current = currentTime
           
           // Clear typed text for new lyric
           setTypedText('')
           setIsWaitingForTyping(false)
+          
+          // Set up dynamic pause timeout for this lyric
+          const nextLyricIndex = newIndex + 1
+          if (nextLyricIndex < lyricsData.length) {
+            const nextLyricTime = lyricsData[nextLyricIndex].time
+            const currentLyricDuration = nextLyricTime - lyricsData[newIndex].time
+            
+            // Pause video if user hasn't finished typing after 80% of lyric duration
+            const pauseDelay = currentLyricDuration * 0.8 * 1000 // Convert to milliseconds
+            
+            if (pauseTimeoutRef.current) {
+              window.clearTimeout(pauseTimeoutRef.current)
+            }
+            
+            pauseTimeoutRef.current = window.setTimeout(() => {
+              if (playerRef.current && typedTextRef.current !== currentLyrics && typedTextRef.current.length > 0) {
+                console.log('User taking too long, pausing video dynamically')
+                playerRef.current.pauseVideo()
+                setIsWaitingForTyping(true)
+              }
+            }, pauseDelay)
+          }
         }
       }
     }, 100)
@@ -159,6 +206,12 @@ function App() {
     setTime(0)
     setIsWaitingForTyping(false)
     lastProcessedIndex.current = -1
+    lyricStartTime.current = null
+    typedTextRef.current = ''
+    if (pauseTimeoutRef.current) {
+      window.clearTimeout(pauseTimeoutRef.current)
+      pauseTimeoutRef.current = null
+    }
   }
 
   const handleRefreshLyrics = () => {
@@ -166,34 +219,14 @@ function App() {
     fetchLyrics()
   }
 
-  // Video control functions
-  const handlePlayVideo = () => {
-    if (playerRef.current) {
-      playerRef.current.playVideo()
-    }
-  }
-
-  const handlePauseVideo = () => {
-    if (playerRef.current) {
-      playerRef.current.pauseVideo()
-    }
-  }
-
-  const handleStopVideo = () => {
-    if (playerRef.current) {
-      playerRef.current.pauseVideo()
-      playerRef.current.seekTo(0)
-      setTypedText('')
-      setCurrentLyricIndex(-1)
-      setCurrentLyrics("Click play to start...")
-      lastProcessedIndex.current = -1
-    }
-  }
 
   useEffect(() => {
     return () => {
       if (syncIntervalRef.current) {
         window.clearInterval(syncIntervalRef.current)
+      }
+      if (pauseTimeoutRef.current) {
+        window.clearTimeout(pauseTimeoutRef.current)
       }
     }
   }, [])
@@ -246,10 +279,6 @@ function App() {
             onSearchOpen={() => setIsSearchOpen(true)}
             onRefreshLyrics={handleRefreshLyrics}
             isLoadingLyrics={isLoadingLyrics}
-            onPlayVideo={handlePlayVideo}
-            onPauseVideo={handlePauseVideo}
-            onStopVideo={handleStopVideo}
-            playerState={playerState}
           />
         </div>
       </main>

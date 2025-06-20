@@ -14,6 +14,8 @@ export interface YouTubePlayerInstance {
   getDuration(): number;
   getVolume(): number;
   setVolume(volume: number): void;
+  setPlaybackRate(rate: number): void;
+  getPlaybackRate(): number;
 }
 
 interface YouTubePlayerOptions {
@@ -101,7 +103,9 @@ export class YouTubePlayerManager {
                 ytPlayer.seekTo(seconds, allowSeekAhead ?? true),
               getDuration: () => ytPlayer.getDuration(),
               getVolume: () => ytPlayer.getVolume(),
-              setVolume: (volume: number) => ytPlayer.setVolume(volume)
+              setVolume: (volume: number) => ytPlayer.setVolume(volume),
+              setPlaybackRate: (rate: number) => ytPlayer.setPlaybackRate(rate),
+              getPlaybackRate: () => ytPlayer.getPlaybackRate()
             };
             
             if (this.options.onReady) {
