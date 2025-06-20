@@ -24,8 +24,26 @@ function App() {
   const [isPlayerReady, setIsPlayerReady] = useState(false)
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false)
   const [lyricsError, setLyricsError] = useState<string | null>(null)
+  const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
+  const [playerState, setPlayerState] = useState(-1)
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
+  const lastProcessedIndex = useRef<number>(-1)
+
+  // Debug: Track typedText changes
+  useEffect(() => {
+    console.log('typedText changed to:', `"${typedText}"`, 'Stack trace:')
+    console.trace()
+  }, [typedText])
+
+  // Check if user has caught up and resume video if needed
+  useEffect(() => {
+    if (isWaitingForTyping && typedText === currentLyrics && playerRef.current) {
+      console.log('User caught up! Resuming video')
+      playerRef.current.playVideo()
+      setIsWaitingForTyping(false)
+    }
+  }, [typedText, currentLyrics, isWaitingForTyping])
 
   useEffect(() => {
     fetchLyrics()
@@ -95,16 +113,40 @@ function App() {
         const currentTime = playerRef.current.getCurrentTime()
         const newIndex = getCurrentLyricIndex(lyricsData, currentTime)
         
+        // Update player state
+        const currentPlayerState = playerRef.current.getPlayerState()
+        if (currentPlayerState !== playerState) {
+          setPlayerState(currentPlayerState)
+        }
+        
         // Log every second to avoid spam
         if (Math.floor(currentTime) % 5 === 0 && Math.floor(currentTime * 10) % 10 === 0) {
           console.log(`Player time: ${currentTime.toFixed(2)}s, Current lyric index: ${newIndex}`)
         }
         
-        if (newIndex !== currentLyricIndex && newIndex >= 0) {
-          console.log(`Changing lyric! Time: ${currentTime.toFixed(2)}s, New lyric: "${lyricsData[newIndex].text}"`)
+        // Check if we should move to the next lyric
+        if (newIndex !== currentLyricIndex && newIndex >= 0 && newIndex !== lastProcessedIndex.current) {
+          console.log(`Time for new lyric! Time: ${currentTime.toFixed(2)}s, New lyric: "${lyricsData[newIndex].text}"`)
+          
+          // Check if user hasn't finished typing the current lyric
+          if (currentLyricIndex >= 0 && typedText !== currentLyrics && typedText.length > 0) {
+            console.log('User hasn\'t finished typing current lyric, stopping video')
+            playerRef.current.pauseVideo()
+            setIsWaitingForTyping(true)
+            // Don't advance to next lyric yet - wait for user to finish
+            return
+          }
+          
+          // User has finished (or it's the first lyric), advance to next
+          console.log('Advancing to next lyric')
+          
           setCurrentLyricIndex(newIndex)
           setCurrentLyrics(lyricsData[newIndex].text)
+          lastProcessedIndex.current = newIndex
+          
+          // Clear typed text for new lyric
           setTypedText('')
+          setIsWaitingForTyping(false)
         }
       }
     }, 100)
@@ -115,11 +157,37 @@ function App() {
     setWpm(0)
     setAccuracy(100)
     setTime(0)
+    setIsWaitingForTyping(false)
+    lastProcessedIndex.current = -1
   }
 
   const handleRefreshLyrics = () => {
     lyricsService.clearCache()
     fetchLyrics()
+  }
+
+  // Video control functions
+  const handlePlayVideo = () => {
+    if (playerRef.current) {
+      playerRef.current.playVideo()
+    }
+  }
+
+  const handlePauseVideo = () => {
+    if (playerRef.current) {
+      playerRef.current.pauseVideo()
+    }
+  }
+
+  const handleStopVideo = () => {
+    if (playerRef.current) {
+      playerRef.current.pauseVideo()
+      playerRef.current.seekTo(0)
+      setTypedText('')
+      setCurrentLyricIndex(-1)
+      setCurrentLyrics("Click play to start...")
+      lastProcessedIndex.current = -1
+    }
   }
 
   useEffect(() => {
@@ -151,6 +219,11 @@ function App() {
                 {lyricsError} - Using sample lyrics as fallback
               </div>
             )}
+            {isWaitingForTyping && (
+              <div className="text-center text-orange-600 font-medium bg-orange-50 py-2 px-4 rounded-lg border border-orange-200">
+                ⏸️ Video stopped - Finish typing to continue
+              </div>
+            )}
             <LyricsDisplay 
               lyrics={currentLyrics} 
               typedText={typedText} 
@@ -173,6 +246,10 @@ function App() {
             onSearchOpen={() => setIsSearchOpen(true)}
             onRefreshLyrics={handleRefreshLyrics}
             isLoadingLyrics={isLoadingLyrics}
+            onPlayVideo={handlePlayVideo}
+            onPauseVideo={handlePauseVideo}
+            onStopVideo={handleStopVideo}
+            playerState={playerState}
           />
         </div>
       </main>

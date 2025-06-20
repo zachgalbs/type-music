@@ -11,6 +11,11 @@ export default function TypingInput({ targetText, typedText, onTextChange, onSta
   const [startTime, setStartTime] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Debug: Track targetText changes
+  useEffect(() => {
+    console.log('targetText changed to:', `"${targetText}"`)
+  }, [targetText])
+
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus()
@@ -36,6 +41,7 @@ export default function TypingInput({ targetText, typedText, onTextChange, onSta
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
+    console.log('Input change event:', `"${value}"`, 'previous typedText:', `"${typedText}"`)
     if (value.length <= targetText.length) {
       onTextChange(value)
     }
