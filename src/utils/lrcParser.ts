@@ -3,7 +3,7 @@ export interface LyricLine {
   text: string;
 }
 
-export function parseLRC(lrcText: string, playbackRate: number = 1.0): LyricLine[] {
+export function parseLRC(lrcText: string): LyricLine[] {
   const lines = lrcText.split('\n')
   const lyricLines: LyricLine[] = []
 
@@ -16,9 +16,7 @@ export function parseLRC(lrcText: string, playbackRate: number = 1.0): LyricLine
       const text = match[4].trim()
       
       const totalSeconds = minutes * 60 + seconds + hundredths / 100
-      // Scale the timing based on playback rate (slower playback = longer time)
-      const scaledTime = totalSeconds / playbackRate
-      lyricLines.push({ time: scaledTime, text })
+      lyricLines.push({ time: totalSeconds, text })
     }
   }
 

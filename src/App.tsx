@@ -26,7 +26,6 @@ function App() {
   const [lyricsError, setLyricsError] = useState<string | null>(null)
   const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
   const [playerState, setPlayerState] = useState(-1)
-  const playbackRate = 0.8
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -73,7 +72,7 @@ function App() {
       if (lrcLyrics) {
         console.log('Fetched lyrics from API:')
         console.log(lrcLyrics.slice(0, 200) + '...') // Log first 200 chars
-        const lyrics = parseLRC(lrcLyrics, playbackRate)
+        const lyrics = parseLRC(lrcLyrics)
         console.log('Parsed lyrics:', lyrics.length, 'lines')
         setLyricsData(lyrics)
         setCurrentLyrics('Play the video to start typing!')
@@ -81,7 +80,7 @@ function App() {
         console.warn('No lyrics found, using fallback')
         setLyricsError('No lyrics found for this song')
         // Fallback to sample lyrics
-        const lyrics = parseLRC(RICK_ASTLEY_LRC, playbackRate)
+        const lyrics = parseLRC(RICK_ASTLEY_LRC)
         setLyricsData(lyrics)
         setCurrentLyrics('Using sample lyrics - Play to start!')
       }
@@ -89,7 +88,7 @@ function App() {
       console.error('Error fetching lyrics:', error)
       setLyricsError('Failed to load lyrics')
       // Fallback to sample lyrics
-      const lyrics = parseLRC(RICK_ASTLEY_LRC, playbackRate)
+      const lyrics = parseLRC(RICK_ASTLEY_LRC)
       setLyricsData(lyrics)
       setCurrentLyrics('Using sample lyrics - Play to start!')
     } finally {
@@ -109,9 +108,6 @@ function App() {
     console.log('YouTube player ready!')
     playerRef.current = player
     
-    // Set playback rate to 0.8x for slower practice
-    player.setPlaybackRate(playbackRate)
-    console.log(`Set playback rate to ${playbackRate}x`)
     
     setIsPlayerReady(true)
   }
