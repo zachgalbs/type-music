@@ -28,6 +28,7 @@ function App() {
   const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
   const [playerState, setPlayerState] = useState(-1)
   const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
+  const [showPlayPrompt, setShowPlayPrompt] = useState(false)
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -41,23 +42,9 @@ function App() {
     typedTextRef.current = typedText
   }, [typedText])
 
-  // Global keyboard handler for typing anywhere + shortcuts
+  // Global keyboard handler for typing anywhere
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Handle play/pause shortcut (Spacebar when Ctrl/Cmd is held)
-      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
-        e.preventDefault()
-        if (playerRef.current) {
-          const state = playerRef.current.getPlayerState()
-          if (state === 1) { // Playing
-            playerRef.current.pauseVideo()
-          } else {
-            playerRef.current.playVideo()
-          }
-        }
-        return
-      }
-      
       // If typing in an input/textarea, don't intercept
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
@@ -146,8 +133,30 @@ function App() {
   }, [isPlayerReady, lyricsData])
 
   const handlePlayerReady = (player: YouTubePlayerInstance) => {
+    console.log('Player ready, attempting to play video')
     playerRef.current = player
     setIsPlayerReady(true)
+    
+    // Auto-play the video when ready (starts muted due to browser policies)
+    // Add a small delay to ensure player is fully initialized
+    setTimeout(() => {
+      console.log('Calling playVideo()')
+      player.playVideo()
+      
+      // Check if play was successful and unmute after starting
+      setTimeout(() => {
+        const state = player.getPlayerState()
+        console.log('Player state after play attempt:', state)
+        if (state === 1) { // Playing
+          console.log('Video playing, unmuting...')
+          player.setVolume(100)
+          // Note: YouTube API doesn't have direct mute/unmute, but setVolume(0) = muted
+        } else {
+          console.log('Autoplay blocked. Showing play prompt...')
+          setShowPlayPrompt(true)
+        }
+      }, 500)
+    }, 100)
   }
 
   const startLyricSync = () => {
@@ -267,7 +276,7 @@ function App() {
   // Render extension recommendation page
   if (currentPage === 'extension') {
     return (
-      <div className="min-h-screen bg-gray-50 text-gray-900">
+      <div className="min-h-screen bg-gray-950 text-gray-100">
         <Header currentPage={currentPage} onNavigate={setCurrentPage} />
         <ExtensionRecommendation />
       </div>
@@ -276,7 +285,7 @@ function App() {
 
   // Render main practice page
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-gray-950 text-gray-100">
       <Header currentPage={currentPage} onNavigate={setCurrentPage} />
       
       {/* Floating WPM display */}
@@ -284,25 +293,45 @@ function App() {
       
       <main className="container mx-auto px-6 py-8 max-w-5xl">
         <div className="space-y-6">
-          <VideoPlayer videoId={currentVideo} onPlayerReady={handlePlayerReady} />
-          
-          <div className="text-center text-xs text-gray-500 -mt-2">
-            Press <kbd className="px-2 py-0.5 bg-gray-200 rounded text-xs">Ctrl/Cmd + Space</kbd> to play/pause
+          <div className="relative">
+            <VideoPlayer videoId={currentVideo} onPlayerReady={handlePlayerReady} />
+            {showPlayPrompt && (
+              <div 
+                className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center cursor-pointer rounded-lg"
+                onClick={() => {
+                  if (playerRef.current) {
+                    playerRef.current.playVideo()
+                    playerRef.current.setVolume(100)
+                    setShowPlayPrompt(false)
+                  }
+                }}
+              >
+                <div className="text-center">
+                  <div className="bg-gray-800 hover:bg-gray-700 text-white px-8 py-4 rounded-lg transition-colors">
+                    <svg className="w-12 h-12 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                    </svg>
+                    <p className="font-medium">Click to Play</p>
+                    <p className="text-sm text-gray-400 mt-1">Autoplay requires interaction</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
             {isLoadingLyrics && (
-              <div className="text-center text-blue-600">
+              <div className="text-center text-blue-400">
                 Loading lyrics from lrclib.net...
               </div>
             )}
             {lyricsError && (
-              <div className="text-center text-amber-600 text-sm">
+              <div className="text-center text-amber-400 text-sm">
                 {lyricsError} - Using sample lyrics as fallback
               </div>
             )}
             {isWaitingForTyping && (
-              <div className="text-center text-orange-600 font-medium bg-orange-50 py-2 px-4 rounded-lg border border-orange-200">
+              <div className="text-center text-orange-400 font-medium bg-orange-950 bg-opacity-50 py-2 px-4 rounded-lg border border-orange-800">
                 ⏸️ Video stopped - Finish typing to continue
               </div>
             )}

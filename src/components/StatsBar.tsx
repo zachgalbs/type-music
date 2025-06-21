@@ -39,7 +39,7 @@ export default function StatsBar({ wpm }: StatsBarProps) {
 
   return (
     <div 
-      className="fixed top-4 right-4 bg-gray-900 bg-opacity-80 text-white px-3 py-2 rounded-lg transition-opacity duration-300"
+      className="fixed top-4 right-4 bg-gray-800 bg-opacity-90 text-gray-100 px-3 py-2 rounded-lg transition-opacity duration-300 border border-gray-700"
       style={{ opacity: isVisible ? 1 : 0 }}
     >
       <span className="text-sm font-medium" style={{ fontFamily: 'Roboto Mono, monospace' }}>

@@ -17,20 +17,20 @@ export default function ActionButtons({
       <div className="flex justify-center space-x-4">
         <button
           onClick={onReset}
-          className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          className="bg-red-900 hover:bg-red-800 text-gray-100 px-6 py-2 rounded-lg font-medium transition-colors border border-red-800"
         >
           Reset Test
         </button>
         <button
           onClick={onRefreshLyrics}
           disabled={isLoadingLyrics}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          className="bg-green-900 hover:bg-green-800 disabled:bg-gray-800 text-gray-100 px-6 py-2 rounded-lg font-medium transition-colors border border-green-800"
         >
           {isLoadingLyrics ? 'Loading...' : 'Refresh Lyrics'}
         </button>
         <button
           onClick={onSearchOpen}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          className="bg-blue-900 hover:bg-blue-800 text-gray-100 px-6 py-2 rounded-lg font-medium transition-colors border border-blue-800"
         >
           Search New Song
         </button>

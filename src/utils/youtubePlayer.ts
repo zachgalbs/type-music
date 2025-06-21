@@ -77,11 +77,12 @@ export class YouTubePlayerManager {
       this.player = new window.YT.Player(this.containerId, {
         videoId: this.options.videoId,
         playerVars: {
-          autoplay: 0,
+          autoplay: 1,
           controls: 1,
           rel: 0,
           modestbranding: 1,
-          origin: window.location.origin
+          origin: window.location.origin,
+          mute: 1 // Start muted to comply with autoplay policies
         },
         events: {
           onReady: (event: YT.PlayerEvent) => {
