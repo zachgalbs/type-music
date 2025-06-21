@@ -143,7 +143,6 @@ export class YouTubeService {
     let score = 0;
     const title = result.title.toLowerCase();
     const channel = result.channelTitle.toLowerCase();
-    const description = result.description.toLowerCase();
     const track = trackName.toLowerCase();
     const artist = artistName.toLowerCase();
 

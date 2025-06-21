@@ -33,6 +33,10 @@ function App() {
   const [playerState, setPlayerState] = useState(-1)
   const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
   const [showApiKeyPrompt, setShowApiKeyPrompt] = useState(false)
+  const [removeAdLibs, setRemoveAdLibs] = useState(() => {
+    const stored = localStorage.getItem('removeAdLibs')
+    return stored ? JSON.parse(stored) : true // Default to true (remove ad-libs)
+  })
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -110,7 +114,7 @@ function App() {
 
   useEffect(() => {
     fetchLyrics()
-  }, [currentTrack])
+  }, [currentTrack, removeAdLibs])
 
   // Initialize YouTube API key on app startup
   useEffect(() => {
@@ -131,7 +135,7 @@ function App() {
       })
       
       if (lrcLyrics) {
-        const lyrics = parseLRC(lrcLyrics)
+        const lyrics = parseLRC(lrcLyrics, { removeAdLibs })
         console.log('Loaded lyrics:', lyrics.length, 'lines')
         setLyricsData(lyrics)
         setCurrentLyrics('Play the video to start typing!')
@@ -139,7 +143,7 @@ function App() {
         console.warn('No lyrics found, using fallback')
         setLyricsError('No lyrics found for this song')
         // Fallback to sample lyrics
-        const lyrics = parseLRC(RICK_ASTLEY_LRC)
+        const lyrics = parseLRC(RICK_ASTLEY_LRC, { removeAdLibs })
         setLyricsData(lyrics)
         setCurrentLyrics('Using sample lyrics - Play to start!')
       }
@@ -147,7 +151,7 @@ function App() {
       console.error('Error fetching lyrics:', error)
       setLyricsError('Failed to load lyrics')
       // Fallback to sample lyrics
-      const lyrics = parseLRC(RICK_ASTLEY_LRC)
+      const lyrics = parseLRC(RICK_ASTLEY_LRC, { removeAdLibs })
       setLyricsData(lyrics)
       setCurrentLyrics('Using sample lyrics - Play to start!')
     } finally {
@@ -317,6 +321,12 @@ function App() {
     }
   }
 
+  const handleAdLibToggle = (enabled: boolean) => {
+    setRemoveAdLibs(enabled)
+    localStorage.setItem('removeAdLibs', JSON.stringify(enabled))
+    handleReset() // Reset typing state when changing ad-lib setting
+  }
+
 
   useEffect(() => {
     return () => {
@@ -395,6 +405,8 @@ function App() {
             onSearchOpen={() => setIsSearchOpen(true)}
             onRefreshLyrics={handleRefreshLyrics}
             isLoadingLyrics={isLoadingLyrics}
+            removeAdLibs={removeAdLibs}
+            onAdLibToggle={handleAdLibToggle}
           />
         </div>
       </main>

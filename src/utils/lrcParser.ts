@@ -3,7 +3,37 @@ export interface LyricLine {
   text: string;
 }
 
-export function parseLRC(lrcText: string): LyricLine[] {
+export interface LrcParserOptions {
+  removeAdLibs?: boolean;
+}
+
+/**
+ * Removes ad-libs (content within parentheses) from lyric text
+ */
+export function cleanAdLibs(text: string): string {
+  // Remove content within parentheses, including nested parentheses
+  let cleaned = text
+  let hasParentheses = true
+  
+  // Keep removing parentheses until none are left (handles nested cases)
+  while (hasParentheses) {
+    const before = cleaned
+    // Remove innermost parentheses first
+    cleaned = cleaned.replace(/\([^()]*\)/g, '')
+    hasParentheses = cleaned !== before
+  }
+  
+  // Clean up extra whitespace
+  cleaned = cleaned
+    .replace(/\s+/g, ' ') // Multiple spaces -> single space
+    .replace(/\s+([,.!?;:])/g, '$1') // Remove space before punctuation
+    .replace(/([,.!?;:])\s*([,.!?;:])/g, '$1$2') // Remove space between punctuation
+    .trim()
+  
+  return cleaned
+}
+
+export function parseLRC(lrcText: string, options: LrcParserOptions = {}): LyricLine[] {
   const lines = lrcText.split('\n')
   const lyricLines: LyricLine[] = []
 
@@ -13,10 +43,18 @@ export function parseLRC(lrcText: string): LyricLine[] {
       const minutes = parseInt(match[1], 10)
       const seconds = parseInt(match[2], 10)
       const hundredths = parseInt(match[3], 10)
-      const text = match[4].trim()
+      let text = match[4].trim()
       
-      const totalSeconds = minutes * 60 + seconds + hundredths / 100
-      lyricLines.push({ time: totalSeconds, text })
+      // Apply ad-lib removal if requested
+      if (options.removeAdLibs) {
+        text = cleanAdLibs(text)
+      }
+      
+      // Only add non-empty lines after cleaning
+      if (text.length > 0) {
+        const totalSeconds = minutes * 60 + seconds + hundredths / 100
+        lyricLines.push({ time: totalSeconds, text })
+      }
     }
   }
 

@@ -3,13 +3,17 @@ interface ActionButtonsProps {
   onSearchOpen: () => void
   onRefreshLyrics: () => void
   isLoadingLyrics?: boolean
+  removeAdLibs: boolean
+  onAdLibToggle: (enabled: boolean) => void
 }
 
 export default function ActionButtons({ 
   onReset, 
   onSearchOpen, 
   onRefreshLyrics, 
-  isLoadingLyrics
+  isLoadingLyrics,
+  removeAdLibs,
+  onAdLibToggle
 }: ActionButtonsProps) {
   return (
     <div className="space-y-4">
@@ -34,6 +38,19 @@ export default function ActionButtons({
         >
           Search New Song
         </button>
+      </div>
+      
+      {/* Settings */}
+      <div className="flex justify-center">
+        <label className="flex items-center space-x-3 text-gray-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={removeAdLibs}
+            onChange={(e) => onAdLibToggle(e.target.checked)}
+            className="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+          <span className="text-sm font-medium">Remove ad-libs (parentheses content)</span>
+        </label>
       </div>
     </div>
   )
