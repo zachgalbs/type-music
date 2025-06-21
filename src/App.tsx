@@ -35,17 +35,14 @@ function App() {
   const pauseTimeoutRef = useRef<number | null>(null)
   const typedTextRef = useRef<string>('')
 
-  // Debug: Track typedText changes and keep ref updated
+  // Keep ref updated with typedText changes
   useEffect(() => {
-    console.log('typedText changed to:', `"${typedText}"`, 'Stack trace:')
-    console.trace()
     typedTextRef.current = typedText
   }, [typedText])
 
   // Check if user has caught up and resume video if needed
   useEffect(() => {
     if (isWaitingForTyping && typedText === currentLyrics && playerRef.current) {
-      console.log('User caught up! Resuming video')
       playerRef.current.playVideo()
       setIsWaitingForTyping(false)
       // Clear any pending pause timeout
@@ -65,17 +62,14 @@ function App() {
     setLyricsError(null)
     
     try {
-      console.log('Fetching lyrics for Never Gonna Give You Up...')
       const lrcLyrics = await lyricsService.getLrcFormatLyrics({
         trackName: 'Never Gonna Give You Up',
         artistName: 'Rick Astley'
       })
       
       if (lrcLyrics) {
-        console.log('Fetched lyrics from API:')
-        console.log(lrcLyrics.slice(0, 200) + '...') // Log first 200 chars
         const lyrics = parseLRC(lrcLyrics)
-        console.log('Parsed lyrics:', lyrics.length, 'lines')
+        console.log('Loaded lyrics:', lyrics.length, 'lines')
         setLyricsData(lyrics)
         setCurrentLyrics('Play the video to start typing!')
       } else {
@@ -101,16 +95,12 @@ function App() {
   // Start sync when both player and lyrics are ready
   useEffect(() => {
     if (isPlayerReady && lyricsData.length > 0) {
-      console.log('Both player and lyrics ready, starting sync')
       startLyricSync()
     }
   }, [isPlayerReady, lyricsData])
 
   const handlePlayerReady = (player: YouTubePlayerInstance) => {
-    console.log('YouTube player ready!')
     playerRef.current = player
-    
-    
     setIsPlayerReady(true)
   }
 
@@ -119,12 +109,13 @@ function App() {
       window.clearInterval(syncIntervalRef.current)
     }
 
-    console.log('Starting lyrics sync, lyrics data:', lyricsData)
-
     syncIntervalRef.current = window.setInterval(() => {
       if (playerRef.current && lyricsData.length > 0) {
         const currentTime = playerRef.current.getCurrentTime()
-        const newIndex = getCurrentLyricIndex(lyricsData, currentTime)
+        // Add 300ms buffer - advance lyrics 300ms before actual timestamp
+        const LYRIC_ADVANCE_BUFFER = 0.3
+        const adjustedTime = currentTime + LYRIC_ADVANCE_BUFFER
+        const newIndex = getCurrentLyricIndex(lyricsData, adjustedTime)
         
         // Update player state
         const currentPlayerState = playerRef.current.getPlayerState()
@@ -132,69 +123,75 @@ function App() {
           setPlayerState(currentPlayerState)
         }
         
-        // Log every second to avoid spam
-        if (Math.floor(currentTime) % 5 === 0 && Math.floor(currentTime * 10) % 10 === 0) {
-          console.log(`Player time: ${currentTime.toFixed(2)}s, Current lyric index: ${newIndex}`)
-        }
-        
-        // Check if we should move to the next lyric
-        if (newIndex !== currentLyricIndex && newIndex >= 0 && newIndex !== lastProcessedIndex.current) {
-          console.log(`Time for new lyric! Time: ${currentTime.toFixed(2)}s, New lyric: "${lyricsData[newIndex].text}"`)
-          
-          // Check if user hasn't finished typing the current lyric
-          const currentTypedText = typedTextRef.current
-          console.log('Checking if user finished typing:')
-          console.log('  currentLyricIndex:', currentLyricIndex)
-          console.log('  typedText (state):', `"${typedText}"`)
-          console.log('  typedText (ref):', `"${currentTypedText}"`)
-          console.log('  currentLyrics:', `"${currentLyrics}"`)
-          console.log('  ref === currentLyrics:', currentTypedText === currentLyrics)
-          console.log('  ref.length:', currentTypedText.length)
-          
-          if (currentLyricIndex >= 0 && currentTypedText !== currentLyrics && currentTypedText.length > 0) {
-            console.log('User hasn\'t finished typing current lyric, stopping video')
-            playerRef.current.pauseVideo()
-            setIsWaitingForTyping(true)
-            // Don't advance to next lyric yet - wait for user to finish
-            return
-          }
-          
-          // User has finished (or it's the first lyric), advance to next
-          console.log('Advancing to next lyric')
-          
-          setCurrentLyricIndex(newIndex)
-          setCurrentLyrics(lyricsData[newIndex].text)
-          lastProcessedIndex.current = newIndex
-          lyricStartTime.current = currentTime
-          
-          // Clear typed text for new lyric
-          setTypedText('')
-          setIsWaitingForTyping(false)
-          
-          // Clear any existing timeout since we're using timestamp-based pausing now
-          if (pauseTimeoutRef.current) {
-            window.clearTimeout(pauseTimeoutRef.current)
-            pauseTimeoutRef.current = null
-          }
-        }
-
-        // Check if we should pause at the next lyric's timestamp
+        // FIRST: Check if we should pause at the next lyric's timestamp (before advancing)
         if (currentLyricIndex >= 0 && !isWaitingForTyping) {
           const nextLyricIndex = currentLyricIndex + 1
           if (nextLyricIndex < lyricsData.length) {
             const nextLyricTime = lyricsData[nextLyricIndex].time
             const currentTypedText = typedTextRef.current
             
-            // Add small buffer (0.1s) to account for timing precision
-            const timeBuffer = 0.1
+            // Add buffer to pause slightly before the next lyric starts
+            const timeBuffer = 0.3
             
-            // Pause if we've reached the next lyric time and user hasn't finished typing
-            if (currentTime >= (nextLyricTime - timeBuffer) && currentTypedText !== currentLyrics && currentTypedText.length > 0) {
-              console.log(`Pausing at next lyric timestamp: ${nextLyricTime.toFixed(2)}s (current: ${currentTime.toFixed(2)}s)`)
-              console.log(`User hasn't finished typing: "${currentTypedText}" vs "${currentLyrics}"`)
+            // Pause if we've reached the next lyric time and user hasn't finished typing current lyric
+            if (currentTime >= (nextLyricTime - timeBuffer) && currentTypedText !== currentLyrics) {
+              console.log('Pausing at timestamp - unfinished typing')
               playerRef.current.pauseVideo()
               setIsWaitingForTyping(true)
+              return // Don't advance to next lyric yet
             }
+          }
+        }
+        
+        // SECOND: Check if we should move to the next lyric (only if not pausing)
+        // Use lastProcessedIndex as source of truth since React state is async
+        const currentProcessedIndex = lastProcessedIndex.current
+        const shouldProcessNewIndex = newIndex >= 0 && newIndex !== currentProcessedIndex
+        
+        if (shouldProcessNewIndex) {
+          const currentTypedText = typedTextRef.current
+          
+          console.log('=== LYRIC ADVANCE CHECK ===')
+          console.log('currentProcessedIndex:', currentProcessedIndex)
+          console.log('newIndex:', newIndex)
+          console.log('currentTypedText:', `"${currentTypedText}"`)
+          
+          // If we're at the initial state (-1), advance to first lyric (0) immediately
+          if (currentProcessedIndex === -1) {
+            console.log('✅ INITIAL SETUP - Setting first lyric')
+            const firstLyric = lyricsData[0]?.text || ''
+            setCurrentLyricIndex(0)
+            setCurrentLyrics(firstLyric)
+            lastProcessedIndex.current = 0
+            lyricStartTime.current = currentTime
+            setIsWaitingForTyping(false)
+            return
+          }
+          
+          // For normal lyric advancement, check if user finished current lyric
+          const currentLyricText = lyricsData[currentProcessedIndex]?.text || ''
+          console.log('currentLyricText:', `"${currentLyricText}"`)
+          console.log('user finished?:', currentTypedText === currentLyricText)
+          
+          if (currentTypedText !== currentLyricText) {
+            console.log('✅ PAUSING - user hasn\'t finished current lyric')
+            playerRef.current.pauseVideo()
+            setIsWaitingForTyping(true)
+            return
+          }
+          
+          // User finished current lyric, advance to next
+          const nextLyricIndex = currentProcessedIndex + 1
+          if (nextLyricIndex < lyricsData.length) {
+            console.log('✅ ADVANCING - Next lyric:', lyricsData[nextLyricIndex].text)
+            setCurrentLyricIndex(nextLyricIndex)
+            setCurrentLyrics(lyricsData[nextLyricIndex].text)
+            lastProcessedIndex.current = nextLyricIndex
+            lyricStartTime.current = currentTime
+            setTypedText('')
+            setIsWaitingForTyping(false)
+          } else {
+            console.log('✅ COMPLETED - No more lyrics')
           }
         }
       }
