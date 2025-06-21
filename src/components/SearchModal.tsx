@@ -2,9 +2,10 @@ interface SearchModalProps {
   isOpen: boolean
   onClose: () => void
   onVideoSelect: (videoId: string) => void
+  onTrackSelect: (track: { trackName: string; artistName: string }) => void
 }
 
-export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
+export default function SearchModal({ isOpen, onClose, onTrackSelect }: SearchModalProps) {
   if (!isOpen) return null
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -13,10 +14,10 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     const song = formData.get('song') as string
     const artist = formData.get('artist') as string
     
-    // For now, just close the modal
-    // Later we'll implement actual search functionality
-    console.log('Searching for:', { song, artist })
-    onClose()
+    if (song && artist) {
+      onTrackSelect({ trackName: song, artistName: artist })
+      onClose()
+    }
   }
 
   return (

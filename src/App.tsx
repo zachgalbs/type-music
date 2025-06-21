@@ -7,13 +7,16 @@ import TypingInput from './components/TypingInput'
 import ActionButtons from './components/ActionButtons'
 import SearchModal from './components/SearchModal'
 import ExtensionRecommendation from './components/ExtensionRecommendation'
+import ApiKeyPrompt from './components/ApiKeyPrompt'
 import type { YouTubePlayerInstance } from './utils/youtubePlayer'
 import { parseLRC, getCurrentLyricIndex, type LyricLine } from './utils/lrcParser'
 import { RICK_ASTLEY_LRC } from './data/sampleLyrics'
 import { lyricsService } from './services/lyricsService'
+import { youtubeService } from './services/youtubeService'
 
 function App() {
   const [currentVideo, setCurrentVideo] = useState('dQw4w9WgXcQ')
+  const [currentTrack, setCurrentTrack] = useState({ trackName: 'Never Gonna Give You Up', artistName: 'Rick Astley' })
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [wpm, setWpm] = useState(0)
   const [accuracy, setAccuracy] = useState(100)
@@ -24,10 +27,12 @@ function App() {
   const [typedText, setTypedText] = useState('')
   const [isPlayerReady, setIsPlayerReady] = useState(false)
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false)
+  const [isSearchingVideo, setIsSearchingVideo] = useState(false)
   const [lyricsError, setLyricsError] = useState<string | null>(null)
   const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
   const [playerState, setPlayerState] = useState(-1)
   const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
+  const [showApiKeyPrompt, setShowApiKeyPrompt] = useState(false)
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -105,6 +110,14 @@ function App() {
 
   useEffect(() => {
     fetchLyrics()
+  }, [currentTrack])
+
+  // Initialize YouTube API key on app startup
+  useEffect(() => {
+    const storedApiKey = localStorage.getItem('youtube_api_key')
+    if (storedApiKey) {
+      youtubeService.setApiKey(storedApiKey)
+    }
   }, [])
 
   const fetchLyrics = async () => {
@@ -113,8 +126,8 @@ function App() {
     
     try {
       const lrcLyrics = await lyricsService.getLrcFormatLyrics({
-        trackName: 'Never Gonna Give You Up',
-        artistName: 'Rick Astley'
+        trackName: currentTrack.trackName,
+        artistName: currentTrack.artistName
       })
       
       if (lrcLyrics) {
@@ -257,6 +270,53 @@ function App() {
     fetchLyrics()
   }
 
+  const searchAndLoadTrack = async (track: { trackName: string; artistName: string }) => {
+    setCurrentTrack(track)
+    
+    // Check if YouTube API key is set
+    const apiKey = localStorage.getItem('youtube_api_key')
+    if (!apiKey) {
+      setShowApiKeyPrompt(true)
+      return
+    }
+    
+    youtubeService.setApiKey(apiKey)
+    setIsSearchingVideo(true)
+    
+    try {
+      // Search for the best matching YouTube video
+      const videoId = await youtubeService.searchBestMatch(track.trackName, track.artistName)
+      
+      if (videoId) {
+        console.log(`Found video for ${track.artistName} - ${track.trackName}:`, videoId)
+        setCurrentVideo(videoId)
+      } else {
+        console.warn(`No video found for ${track.artistName} - ${track.trackName}, keeping current video`)
+      }
+    } catch (error) {
+      console.error('Error searching for video:', error)
+      if (error instanceof Error && error.message.includes('API key')) {
+        setShowApiKeyPrompt(true)
+      }
+    } finally {
+      setIsSearchingVideo(false)
+    }
+    
+    // Reset typing state when switching songs
+    handleReset()
+  }
+
+  const handleApiKeySubmit = (apiKey: string) => {
+    localStorage.setItem('youtube_api_key', apiKey)
+    youtubeService.setApiKey(apiKey)
+    setShowApiKeyPrompt(false)
+    
+    // Retry the search if we have a pending track
+    if (currentTrack.trackName !== 'Never Gonna Give You Up') {
+      searchAndLoadTrack(currentTrack)
+    }
+  }
+
 
   useEffect(() => {
     return () => {
@@ -295,6 +355,11 @@ function App() {
             {isLoadingLyrics && (
               <div className="text-center text-blue-400">
                 Loading lyrics from lrclib.net...
+              </div>
+            )}
+            {isSearchingVideo && (
+              <div className="text-center text-purple-400">
+                Searching YouTube for matching video...
               </div>
             )}
             {lyricsError && (
@@ -338,6 +403,13 @@ function App() {
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onVideoSelect={setCurrentVideo}
+        onTrackSelect={searchAndLoadTrack}
+      />
+
+      <ApiKeyPrompt
+        isOpen={showApiKeyPrompt}
+        onSubmit={handleApiKeySubmit}
+        onCancel={() => setShowApiKeyPrompt(false)}
       />
     </div>
   )
