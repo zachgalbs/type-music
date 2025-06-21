@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 
 interface TypingInputProps {
   targetText: string
@@ -7,24 +7,28 @@ interface TypingInputProps {
   onStatsUpdate: (wpm: number, accuracy: number, time: number) => void
 }
 
-export default function TypingInput({ targetText, typedText, onTextChange, onStatsUpdate }: TypingInputProps) {
+const TypingInput = forwardRef<HTMLInputElement, TypingInputProps>(({ targetText, typedText, onTextChange, onStatsUpdate }, ref) => {
   const [startTime, setStartTime] = useState<number | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [currentPosition, setCurrentPosition] = useState(0)
+  const hiddenInputRef = useRef<HTMLInputElement>(null)
 
-  // Debug: Track targetText changes
+  // Expose the input ref to parent
+  useImperativeHandle(ref, () => hiddenInputRef.current!, [])
+
   useEffect(() => {
-    console.log('targetText changed to:', `"${targetText}"`)
+    setCurrentPosition(0)
   }, [targetText])
 
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus()
+    if (hiddenInputRef.current) {
+      hiddenInputRef.current.focus()
     }
   }, [])
 
   // Reset startTime when targetText changes (new lyric)
   useEffect(() => {
     setStartTime(null)
+    setCurrentPosition(0)
   }, [targetText])
 
   useEffect(() => {
@@ -59,30 +63,63 @@ export default function TypingInput({ targetText, typedText, onTextChange, onSta
     }
   }, [typedText, startTime, targetText, onStatsUpdate])
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    console.log('Input change event:', `"${value}"`, 'previous typedText:', `"${typedText}"`)
-    if (value.length <= targetText.length) {
-      onTextChange(value)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    
+    if (e.key === 'Backspace') {
+      // Allow backspace to go back one position
+      if (currentPosition > 0) {
+        const newPosition = currentPosition - 1
+        setCurrentPosition(newPosition)
+        onTextChange(typedText.slice(0, newPosition))
+      }
+      return
     }
+    
+    // Only process single character keys
+    if (e.key.length !== 1) {
+      return
+    }
+    
+    // Check if we've reached the end
+    if (currentPosition >= targetText.length) {
+      return
+    }
+    
+    const expectedChar = targetText[currentPosition]
+    const typedChar = e.key
+    
+    // Always advance position regardless of correctness
+    const newPosition = currentPosition + 1
+    setCurrentPosition(newPosition)
+    
+    // Update the typed text with the actual character typed
+    const newTypedText = typedText + typedChar
+    onTextChange(newTypedText)
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Clear the input to prevent text accumulation
+    e.target.value = ''
   }
 
   return (
     <div className="w-full">
+      {/* Completely hidden input to capture keystrokes */}
       <input
-        ref={inputRef}
+        ref={hiddenInputRef}
         type="text"
-        value={typedText}
+        value=""
         onChange={handleInputChange}
-        className="w-full bg-white text-gray-900 text-xl p-4 rounded-lg border border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 font-mono shadow-sm"
-        placeholder="Start typing the lyrics..."
+        onKeyDown={handleKeyDown}
+        className="absolute top-0 left-0 w-1 h-1 opacity-0 pointer-events-none"
         autoComplete="off"
         spellCheck={false}
+        tabIndex={-1}
       />
-      <div className="mt-2 flex justify-between text-sm text-gray-600">
-        <span>Type along with the music</span>
-        <span>{typedText.length}/{targetText.length}</span>
-      </div>
     </div>
   )
-}
+})
+
+TypingInput.displayName = 'TypingInput'
+export default TypingInput

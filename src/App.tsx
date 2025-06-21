@@ -34,11 +34,57 @@ function App() {
   const lyricStartTime = useRef<number | null>(null)
   const pauseTimeoutRef = useRef<number | null>(null)
   const typedTextRef = useRef<string>('')
+  const globalInputRef = useRef<HTMLInputElement | null>(null)
 
   // Keep ref updated with typedText changes
   useEffect(() => {
     typedTextRef.current = typedText
   }, [typedText])
+
+  // Global keyboard handler for typing anywhere + shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Handle play/pause shortcut (Spacebar when Ctrl/Cmd is held)
+      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+        e.preventDefault()
+        if (playerRef.current) {
+          const state = playerRef.current.getPlayerState()
+          if (state === 1) { // Playing
+            playerRef.current.pauseVideo()
+          } else {
+            playerRef.current.playVideo()
+          }
+        }
+        return
+      }
+      
+      // If typing in an input/textarea, don't intercept
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return
+      }
+      
+      // Forward all other keys to the hidden input for typing
+      if (globalInputRef.current && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        globalInputRef.current.focus()
+        
+        // Simulate the keydown event on the hidden input
+        const newEvent = new KeyboardEvent('keydown', {
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode,
+          which: e.which,
+          shiftKey: e.shiftKey,
+          bubbles: true
+        })
+        globalInputRef.current.dispatchEvent(newEvent)
+      }
+    }
+    
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [])
 
   // Check if user has caught up and resume video if needed
   useEffect(() => {
@@ -151,14 +197,8 @@ function App() {
         if (shouldProcessNewIndex) {
           const currentTypedText = typedTextRef.current
           
-          console.log('=== LYRIC ADVANCE CHECK ===')
-          console.log('currentProcessedIndex:', currentProcessedIndex)
-          console.log('newIndex:', newIndex)
-          console.log('currentTypedText:', `"${currentTypedText}"`)
-          
           // If we're at the initial state (-1), advance to first lyric (0) immediately
           if (currentProcessedIndex === -1) {
-            console.log('✅ INITIAL SETUP - Setting first lyric')
             const firstLyric = lyricsData[0]?.text || ''
             setCurrentLyricIndex(0)
             setCurrentLyrics(firstLyric)
@@ -170,11 +210,8 @@ function App() {
           
           // For normal lyric advancement, check if user finished current lyric
           const currentLyricText = lyricsData[currentProcessedIndex]?.text || ''
-          console.log('currentLyricText:', `"${currentLyricText}"`)
-          console.log('user finished?:', currentTypedText === currentLyricText)
           
           if (currentTypedText !== currentLyricText) {
-            console.log('✅ PAUSING - user hasn\'t finished current lyric')
             playerRef.current.pauseVideo()
             setIsWaitingForTyping(true)
             return
@@ -183,15 +220,12 @@ function App() {
           // User finished current lyric, advance to next
           const nextLyricIndex = currentProcessedIndex + 1
           if (nextLyricIndex < lyricsData.length) {
-            console.log('✅ ADVANCING - Next lyric:', lyricsData[nextLyricIndex].text)
             setCurrentLyricIndex(nextLyricIndex)
             setCurrentLyrics(lyricsData[nextLyricIndex].text)
             lastProcessedIndex.current = nextLyricIndex
             lyricStartTime.current = currentTime
             setTypedText('')
             setIsWaitingForTyping(false)
-          } else {
-            console.log('✅ COMPLETED - No more lyrics')
           }
         }
       }
@@ -249,6 +283,10 @@ function App() {
         <div className="space-y-6">
           <VideoPlayer videoId={currentVideo} onPlayerReady={handlePlayerReady} />
           
+          <div className="text-center text-xs text-gray-500 -mt-2">
+            Press <kbd className="px-2 py-0.5 bg-gray-200 rounded text-xs">Ctrl/Cmd + Space</kbd> to play/pause
+          </div>
+          
           <StatsBar wpm={wpm} accuracy={accuracy} time={time} />
           
           <div className="space-y-2">
@@ -274,6 +312,7 @@ function App() {
           </div>
           
           <TypingInput 
+            ref={globalInputRef}
             targetText={currentLyrics}
             typedText={typedText}
             onTextChange={setTypedText}

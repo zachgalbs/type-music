@@ -6,39 +6,39 @@ interface LyricsDisplayProps {
 export default function LyricsDisplay({ lyrics, typedText }: LyricsDisplayProps) {
   const renderCharacters = () => {
     return lyrics.split('').map((char, index) => {
-      let className = 'text-2xl font-mono '
-      
-      if (index < typedText.length) {
-        if (typedText[index] === char) {
-          className += 'text-green-600 bg-green-100 rounded-sm'
-        } else {
-          className += 'text-red-600 bg-red-100 rounded-sm'
-        }
-      } else if (index === typedText.length) {
-        className += 'text-gray-900 bg-blue-200 rounded-sm'
-      } else {
-        className += 'text-gray-500'
-      }
+      const isCurrentPosition = index === typedText.length
       
       return (
-        <span key={index} className={className}>
-          {char === ' ' ? '\u00A0' : char}
+        <span key={index} className="relative inline-block" style={{ fontFamily: 'Roboto Mono, monospace' }}>
+          <span className="text-3xl text-gray-800">
+            {char === ' ' ? '\u00A0' : char}
+          </span>
+          {isCurrentPosition && (
+            <span 
+              className="absolute -left-0.5 top-0 w-0.5 h-full bg-gray-800"
+              style={{ 
+                animation: 'blink 1s infinite'
+              }}
+            />
+          )}
         </span>
       )
     })
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 min-h-32">
-      <div className="text-center leading-relaxed">
-        {renderCharacters()}
+    <>
+      <style>{`
+        @keyframes blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
+        }
+      `}</style>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-32">
+        <div className="text-center leading-relaxed tracking-wide">
+          {renderCharacters()}
+        </div>
       </div>
-      <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
-        <div 
-          className="h-full bg-blue-500 rounded-full transition-all duration-300"
-          style={{ width: `${lyrics.length > 0 ? (typedText.length / lyrics.length) * 100 : 0}%` }}
-        ></div>
-      </div>
-    </div>
+    </>
   )
 }
