@@ -64,6 +64,23 @@ const TypingInput = forwardRef<HTMLInputElement, TypingInputProps>(({ targetText
   }, [typedText, startTime, targetText, onStatsUpdate])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Don't prevent default for modifier key combinations - let them pass through
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return // Let browser handle shortcuts like Cmd+R
+    }
+    
+    // Don't prevent default for function keys
+    if (e.key.startsWith('F') && e.key.length === 2) {
+      return
+    }
+    
+    // Don't prevent default for navigation keys
+    const navigationKeys = ['Tab', 'Escape', 'Enter', 'Home', 'End', 'PageUp', 'PageDown']
+    if (navigationKeys.includes(e.key)) {
+      return
+    }
+    
+    // Now prevent default for typing keys only
     e.preventDefault()
     
     if (e.key === 'Backspace') {
