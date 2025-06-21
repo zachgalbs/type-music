@@ -169,26 +169,30 @@ function App() {
           setTypedText('')
           setIsWaitingForTyping(false)
           
-          // Set up dynamic pause timeout for this lyric
-          const nextLyricIndex = newIndex + 1
+          // Clear any existing timeout since we're using timestamp-based pausing now
+          if (pauseTimeoutRef.current) {
+            window.clearTimeout(pauseTimeoutRef.current)
+            pauseTimeoutRef.current = null
+          }
+        }
+
+        // Check if we should pause at the next lyric's timestamp
+        if (currentLyricIndex >= 0 && !isWaitingForTyping) {
+          const nextLyricIndex = currentLyricIndex + 1
           if (nextLyricIndex < lyricsData.length) {
             const nextLyricTime = lyricsData[nextLyricIndex].time
-            const currentLyricDuration = nextLyricTime - lyricsData[newIndex].time
+            const currentTypedText = typedTextRef.current
             
-            // Pause video if user hasn't finished typing after 80% of lyric duration
-            const pauseDelay = currentLyricDuration * 0.8 * 1000 // Convert to milliseconds
+            // Add small buffer (0.1s) to account for timing precision
+            const timeBuffer = 0.1
             
-            if (pauseTimeoutRef.current) {
-              window.clearTimeout(pauseTimeoutRef.current)
+            // Pause if we've reached the next lyric time and user hasn't finished typing
+            if (currentTime >= (nextLyricTime - timeBuffer) && currentTypedText !== currentLyrics && currentTypedText.length > 0) {
+              console.log(`Pausing at next lyric timestamp: ${nextLyricTime.toFixed(2)}s (current: ${currentTime.toFixed(2)}s)`)
+              console.log(`User hasn't finished typing: "${currentTypedText}" vs "${currentLyrics}"`)
+              playerRef.current.pauseVideo()
+              setIsWaitingForTyping(true)
             }
-            
-            pauseTimeoutRef.current = window.setTimeout(() => {
-              if (playerRef.current && typedTextRef.current !== currentLyrics && typedTextRef.current.length > 0) {
-                console.log('User taking too long, pausing video dynamically')
-                playerRef.current.pauseVideo()
-                setIsWaitingForTyping(true)
-              }
-            }, pauseDelay)
           }
         }
       }

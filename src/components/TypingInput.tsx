@@ -22,20 +22,40 @@ export default function TypingInput({ targetText, typedText, onTextChange, onSta
     }
   }, [])
 
+  // Reset startTime when targetText changes (new lyric)
   useEffect(() => {
+    setStartTime(null)
+  }, [targetText])
+
+  useEffect(() => {
+    // Start timing when user begins typing
     if (typedText.length > 0 && startTime === null) {
       setStartTime(Date.now())
     }
 
-    if (startTime) {
+    // Reset timing when text is cleared (new lyric)
+    if (typedText.length === 0 && startTime !== null) {
+      setStartTime(null)
+    }
+
+    if (startTime && typedText.length > 0) {
       const timeElapsed = (Date.now() - startTime) / 1000
-      const wordsTyped = typedText.length / 5
-      const wpm = timeElapsed > 0 ? Math.round((wordsTyped / timeElapsed) * 60) : 0
       
+      // Count actual words typed (more accurate than character/5)
+      const wordsTyped = typedText.trim().split(/\s+/).filter(word => word.length > 0).length
+      
+      // Calculate WPM with minimum time threshold to avoid crazy high numbers
+      const minTimeForWPM = 1 // Don't calculate WPM until at least 1 second of typing
+      const wpm = timeElapsed >= minTimeForWPM ? Math.round((wordsTyped / timeElapsed) * 60) : 0
+      
+      // Calculate accuracy based on correct characters
       const correctChars = typedText.split('').filter((char, index) => char === targetText[index]).length
       const accuracy = typedText.length > 0 ? Math.round((correctChars / typedText.length) * 100) : 100
 
       onStatsUpdate(wpm, accuracy, Math.floor(timeElapsed))
+    } else {
+      // Reset stats when not actively typing
+      onStatsUpdate(0, 100, 0)
     }
   }, [typedText, startTime, targetText, onStatsUpdate])
 
