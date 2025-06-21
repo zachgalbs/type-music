@@ -6,6 +6,7 @@ import LyricsDisplay from './components/LyricsDisplay'
 import TypingInput from './components/TypingInput'
 import ActionButtons from './components/ActionButtons'
 import SearchModal from './components/SearchModal'
+import ExtensionRecommendation from './components/ExtensionRecommendation'
 import type { YouTubePlayerInstance } from './utils/youtubePlayer'
 import { parseLRC, getCurrentLyricIndex, type LyricLine } from './utils/lrcParser'
 import { RICK_ASTLEY_LRC } from './data/sampleLyrics'
@@ -26,6 +27,7 @@ function App() {
   const [lyricsError, setLyricsError] = useState<string | null>(null)
   const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
   const [playerState, setPlayerState] = useState(-1)
+  const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -231,9 +233,20 @@ function App() {
     }
   }, [])
 
+  // Render extension recommendation page
+  if (currentPage === 'extension') {
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-900">
+        <Header currentPage={currentPage} onNavigate={setCurrentPage} />
+        <ExtensionRecommendation />
+      </div>
+    )
+  }
+
+  // Render main practice page
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      <Header />
+      <Header currentPage={currentPage} onNavigate={setCurrentPage} />
       
       <main className="container mx-auto px-6 py-8 max-w-5xl">
         <div className="space-y-6">

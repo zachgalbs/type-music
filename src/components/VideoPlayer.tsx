@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { YouTubePlayerManager, type YouTubePlayerInstance } from '../utils/youtubePlayer'
-import GlobalSpeedDetector from './GlobalSpeedDetector'
 
 interface VideoPlayerProps {
   videoId: string
@@ -47,9 +46,7 @@ export default function VideoPlayer({ videoId, onPlayerReady }: VideoPlayerProps
 
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-4">
-      <GlobalSpeedDetector />
-      
+    <div className="w-full max-w-4xl mx-auto">
       <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-lg">
         <div 
           ref={containerRef}
