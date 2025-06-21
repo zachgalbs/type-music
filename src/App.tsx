@@ -279,6 +279,9 @@ function App() {
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <Header currentPage={currentPage} onNavigate={setCurrentPage} />
       
+      {/* Floating WPM display */}
+      <StatsBar wpm={wpm} accuracy={accuracy} time={time} />
+      
       <main className="container mx-auto px-6 py-8 max-w-5xl">
         <div className="space-y-6">
           <VideoPlayer videoId={currentVideo} onPlayerReady={handlePlayerReady} />
@@ -286,8 +289,6 @@ function App() {
           <div className="text-center text-xs text-gray-500 -mt-2">
             Press <kbd className="px-2 py-0.5 bg-gray-200 rounded text-xs">Ctrl/Cmd + Space</kbd> to play/pause
           </div>
-          
-          <StatsBar wpm={wpm} accuracy={accuracy} time={time} />
           
           <div className="space-y-2">
             {isLoadingLyrics && (

@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 interface StatsBarProps {
   wpm: number
   accuracy: number
@@ -5,12 +7,44 @@ interface StatsBarProps {
 }
 
 export default function StatsBar({ wpm }: StatsBarProps) {
+  const [isVisible, setIsVisible] = useState(false)
+  const [hideTimeout, setHideTimeout] = useState<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    // Show WPM when it's greater than 0 (user is typing)
+    if (wpm > 0) {
+      setIsVisible(true)
+      
+      // Clear any existing hide timeout
+      if (hideTimeout) {
+        clearTimeout(hideTimeout)
+      }
+      
+      // Set new timeout to hide after 2 seconds of no typing
+      const timeout = setTimeout(() => {
+        setIsVisible(false)
+      }, 2000)
+      
+      setHideTimeout(timeout)
+    }
+    
+    return () => {
+      if (hideTimeout) {
+        clearTimeout(hideTimeout)
+      }
+    }
+  }, [wpm])
+
+  if (!isVisible) return null
+
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-      <div className="text-center">
-        <p className="text-sm text-gray-600 mb-1">Words Per Minute</p>
-        <p className="text-3xl font-semibold text-blue-600">{wpm}</p>
-      </div>
+    <div 
+      className="fixed top-4 right-4 bg-gray-900 bg-opacity-80 text-white px-3 py-2 rounded-lg transition-opacity duration-300"
+      style={{ opacity: isVisible ? 1 : 0 }}
+    >
+      <span className="text-sm font-medium" style={{ fontFamily: 'Roboto Mono, monospace' }}>
+        {wpm} WPM
+      </span>
     </div>
   )
 }
