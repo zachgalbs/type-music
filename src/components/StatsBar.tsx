@@ -8,7 +8,7 @@ interface StatsBarProps {
 
 export default function StatsBar({ wpm }: StatsBarProps) {
   const [isVisible, setIsVisible] = useState(false)
-  const [hideTimeout, setHideTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [hideTimeout, setHideTimeout] = useState<number | null>(null)
 
   useEffect(() => {
     // Show WPM when it's greater than 0 (user is typing)

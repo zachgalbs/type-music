@@ -103,7 +103,6 @@ const TypingInput = forwardRef<HTMLInputElement, TypingInputProps>(({ targetText
       return
     }
     
-    const expectedChar = targetText[currentPosition]
     const typedChar = e.key
     
     // Always advance position regardless of correctness
