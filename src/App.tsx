@@ -8,6 +8,7 @@ import ActionButtons from './components/ActionButtons'
 import SearchModal from './components/SearchModal'
 import ExtensionRecommendation from './components/ExtensionRecommendation'
 import ApiKeyPrompt from './components/ApiKeyPrompt'
+import SyncOffsetIndicator from './components/SyncOffsetIndicator'
 import type { YouTubePlayerInstance } from './utils/youtubePlayer'
 import { parseLRC, getCurrentLyricIndex, type LyricLine } from './utils/lrcParser'
 import { RICK_ASTLEY_LRC } from './data/sampleLyrics'
@@ -33,6 +34,10 @@ function App() {
   const [playerState, setPlayerState] = useState(-1)
   const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
   const [showApiKeyPrompt, setShowApiKeyPrompt] = useState(false)
+  const [syncOffset, setSyncOffset] = useState(() => {
+    const stored = localStorage.getItem(`syncOffset_${currentVideo}`)
+    return stored ? parseFloat(stored) : 0
+  })
   const [removeAdLibs, setRemoveAdLibs] = useState(() => {
     const stored = localStorage.getItem('removeAdLibs')
     return stored ? JSON.parse(stored) : true // Default to true (remove ad-libs)
@@ -50,17 +55,35 @@ function App() {
     typedTextRef.current = typedText
   }, [typedText])
 
+  // Check if typing is complete and resume video
+  useEffect(() => {
+    if (isWaitingForTyping && typedText.length >= currentLyrics.length && playerRef.current) {
+      playerRef.current.playVideo()
+      setIsWaitingForTyping(false)
+    }
+  }, [typedText, currentLyrics, isWaitingForTyping])
+
+  // Save sync offset when it changes
+  useEffect(() => {
+    localStorage.setItem(`syncOffset_${currentVideo}`, syncOffset.toString())
+  }, [syncOffset, currentVideo])
+
+  // Load sync offset when video changes
+  useEffect(() => {
+    const stored = localStorage.getItem(`syncOffset_${currentVideo}`)
+    setSyncOffset(stored ? parseFloat(stored) : 0)
+  }, [currentVideo])
 
   // Global keyboard handler for typing anywhere
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept any modified keys (Ctrl, Cmd, Alt)
-      if (e.ctrlKey || e.metaKey || e.altKey) {
+      // Don't intercept any modified keys (Ctrl, Cmd, Alt) except Alt+Backspace
+      if ((e.ctrlKey || e.metaKey) || (e.altKey && e.key !== 'Backspace')) {
         return
       }
       
       // Don't intercept function keys or special keys
-      if (e.key.startsWith('F') && e.key.length === 2) { // F1-F12
+      if (e.key && e.key.startsWith('F') && e.key.length === 2) { // F1-F12
         return
       }
       
@@ -73,6 +96,18 @@ function App() {
       // If typing in an input/textarea, don't intercept
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return
+      }
+      
+      // Handle sync offset adjustment
+      if (e.key === '[' || e.key === ']') {
+        e.preventDefault()
+        const adjustment = e.shiftKey ? 1.0 : 0.1 // Shift for larger adjustments
+        if (e.key === '[') {
+          setSyncOffset(prev => Math.round((prev - adjustment) * 10) / 10)
+        } else {
+          setSyncOffset(prev => Math.round((prev + adjustment) * 10) / 10)
+        }
         return
       }
       
@@ -182,7 +217,7 @@ function App() {
         const currentTime = playerRef.current.getCurrentTime()
         // Add 300ms buffer - advance lyrics 300ms before actual timestamp
         const LYRIC_ADVANCE_BUFFER = 0.3
-        const adjustedTime = currentTime + LYRIC_ADVANCE_BUFFER
+        const adjustedTime = currentTime + LYRIC_ADVANCE_BUFFER + syncOffset
         const newIndex = getCurrentLyricIndex(lyricsData, adjustedTime)
         
         // Update player state
@@ -202,7 +237,7 @@ function App() {
             const timeBuffer = 0.3
             
             // Pause if we've reached the next lyric time and user hasn't finished typing current lyric
-            if (currentTime >= (nextLyricTime - timeBuffer) && currentTypedText !== currentLyrics) {
+            if (currentTime + syncOffset >= (nextLyricTime - timeBuffer) && currentTypedText.length < currentLyrics.length) {
               console.log('Pausing at timestamp - unfinished typing')
               playerRef.current.pauseVideo()
               setIsWaitingForTyping(true)
@@ -233,7 +268,7 @@ function App() {
           // For normal lyric advancement, check if user finished current lyric
           const currentLyricText = lyricsData[currentProcessedIndex]?.text || ''
           
-          if (currentTypedText !== currentLyricText) {
+          if (currentTypedText.length < currentLyricText.length) {
             playerRef.current.pauseVideo()
             setIsWaitingForTyping(true)
             return
@@ -417,6 +452,8 @@ function App() {
         onVideoSelect={setCurrentVideo}
         onTrackSelect={searchAndLoadTrack}
       />
+
+      <SyncOffsetIndicator offset={syncOffset} />
 
       <ApiKeyPrompt
         isOpen={showApiKeyPrompt}

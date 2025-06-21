@@ -84,11 +84,31 @@ const TypingInput = forwardRef<HTMLInputElement, TypingInputProps>(({ targetText
     e.preventDefault()
     
     if (e.key === 'Backspace') {
-      // Allow backspace to go back one position
-      if (currentPosition > 0) {
-        const newPosition = currentPosition - 1
-        setCurrentPosition(newPosition)
-        onTextChange(typedText.slice(0, newPosition))
+      if (e.altKey) {
+        // Option+Backspace: Delete word
+        if (currentPosition > 0) {
+          let newPosition = currentPosition - 1
+          
+          // Skip trailing spaces
+          while (newPosition > 0 && typedText[newPosition] === ' ') {
+            newPosition--
+          }
+          
+          // Delete word characters
+          while (newPosition > 0 && typedText[newPosition - 1] !== ' ') {
+            newPosition--
+          }
+          
+          setCurrentPosition(newPosition)
+          onTextChange(typedText.slice(0, newPosition))
+        }
+      } else {
+        // Regular backspace: Delete one character
+        if (currentPosition > 0) {
+          const newPosition = currentPosition - 1
+          setCurrentPosition(newPosition)
+          onTextChange(typedText.slice(0, newPosition))
+        }
       }
       return
     }
