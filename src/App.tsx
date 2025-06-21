@@ -28,24 +28,6 @@ function App() {
   const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
   const [playerState, setPlayerState] = useState(-1)
   const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
-  const [showPlayPrompt, setShowPlayPrompt] = useState(false)
-  // Check localStorage for previous interaction
-  const [hasUserInteracted, setHasUserInteracted] = useState(() => {
-    const stored = localStorage.getItem('userHasInteracted')
-    const lastInteraction = localStorage.getItem('lastInteractionTime')
-    
-    if (stored === 'true') {
-      console.log('User has interacted before - attempting unmuted autoplay')
-      if (lastInteraction) {
-        const daysSinceInteraction = (Date.now() - parseInt(lastInteraction)) / (1000 * 60 * 60 * 24)
-        console.log(`Last interaction: ${daysSinceInteraction.toFixed(1)} days ago`)
-      }
-      return true
-    }
-    
-    console.log('First time user - will start muted')
-    return false
-  })
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -59,37 +41,6 @@ function App() {
     typedTextRef.current = typedText
   }, [typedText])
 
-  // Detect user interaction and persist it
-  useEffect(() => {
-    const handleUserInteraction = () => {
-      if (!hasUserInteracted) {
-        console.log('User interaction detected - saving for future visits')
-        setHasUserInteracted(true)
-        // Store in localStorage for future visits
-        localStorage.setItem('userHasInteracted', 'true')
-        // Also store timestamp of last interaction
-        localStorage.setItem('lastInteractionTime', Date.now().toString())
-        
-        // Remove listeners after first interaction
-        document.removeEventListener('click', handleUserInteraction)
-        document.removeEventListener('keydown', handleUserInteraction)
-        document.removeEventListener('touchstart', handleUserInteraction)
-      }
-    }
-
-    // Only add listeners if user hasn't interacted before
-    if (!hasUserInteracted) {
-      document.addEventListener('click', handleUserInteraction)
-      document.addEventListener('keydown', handleUserInteraction)
-      document.addEventListener('touchstart', handleUserInteraction)
-    }
-
-    return () => {
-      document.removeEventListener('click', handleUserInteraction)
-      document.removeEventListener('keydown', handleUserInteraction)
-      document.removeEventListener('touchstart', handleUserInteraction)
-    }
-  }, [hasUserInteracted])
 
   // Global keyboard handler for typing anywhere
   useEffect(() => {
@@ -199,39 +150,9 @@ function App() {
   }, [isPlayerReady, lyricsData])
 
   const handlePlayerReady = (player: YouTubePlayerInstance) => {
-    console.log('Player ready, attempting to play video')
-    console.log('Has user interacted:', hasUserInteracted)
+    console.log('Player ready')
     playerRef.current = player
     setIsPlayerReady(true)
-    
-    // Auto-play the video when ready
-    setTimeout(() => {
-      console.log('Calling playVideo()')
-      player.playVideo()
-      
-      // Check if play was successful
-      setTimeout(() => {
-        const state = player.getPlayerState()
-        console.log('Player state after play attempt:', state)
-        
-        if (state === 1) { // Playing
-          // If we started muted but user has interacted, unmute now
-          if (!hasUserInteracted && player.isMuted()) {
-            console.log('Video playing muted, unmuting...')
-            player.unMute()
-            // Also ensure volume is at a reasonable level
-            if (player.getVolume() < 50) {
-              player.setVolume(80)
-            }
-          } else {
-            console.log('Video playing with sound (user had interacted)')
-          }
-        } else {
-          console.log('Autoplay blocked. Showing play prompt...')
-          setShowPlayPrompt(true)
-        }
-      }, 500)
-    }, 100)
   }
 
   const startLyricSync = () => {
@@ -368,36 +289,7 @@ function App() {
       
       <main className="container mx-auto px-6 py-8 max-w-5xl">
         <div className="space-y-6">
-          <div className="relative">
-            <VideoPlayer 
-              videoId={currentVideo} 
-              onPlayerReady={handlePlayerReady}
-              startMuted={!hasUserInteracted}
-            />
-            {showPlayPrompt && (
-              <div 
-                className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center cursor-pointer rounded-lg"
-                onClick={() => {
-                  if (playerRef.current) {
-                    playerRef.current.playVideo()
-                    playerRef.current.unMute()
-                    playerRef.current.setVolume(80)
-                    setShowPlayPrompt(false)
-                  }
-                }}
-              >
-                <div className="text-center">
-                  <div className="bg-gray-800 hover:bg-gray-700 text-white px-8 py-4 rounded-lg transition-colors">
-                    <svg className="w-12 h-12 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                    </svg>
-                    <p className="font-medium">Click to Play</p>
-                    <p className="text-sm text-gray-400 mt-1">Autoplay requires interaction</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <VideoPlayer videoId={currentVideo} onPlayerReady={handlePlayerReady} />
           
           <div className="space-y-2">
             {isLoadingLyrics && (

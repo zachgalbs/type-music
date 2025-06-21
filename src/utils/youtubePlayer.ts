@@ -16,9 +16,6 @@ export interface YouTubePlayerInstance {
   setVolume(volume: number): void;
   setPlaybackRate(rate: number): void;
   getPlaybackRate(): number;
-  mute(): void;
-  unMute(): void;
-  isMuted(): boolean;
 }
 
 interface YouTubePlayerOptions {
@@ -26,7 +23,6 @@ interface YouTubePlayerOptions {
   onReady?: (player: YouTubePlayerInstance) => void;
   onStateChange?: (state: number) => void;
   onError?: (error: number) => void;
-  startMuted?: boolean;
 }
 
 export const PlayerState = {
@@ -81,12 +77,11 @@ export class YouTubePlayerManager {
       this.player = new window.YT.Player(this.containerId, {
         videoId: this.options.videoId,
         playerVars: {
-          autoplay: 1,
+          autoplay: 0,
           controls: 1,
           rel: 0,
           modestbranding: 1,
-          origin: window.location.origin,
-          mute: this.options.startMuted === false ? 0 : 1 // Only mute if not explicitly set to false
+          origin: window.location.origin
         },
         events: {
           onReady: (event: YT.PlayerEvent) => {
@@ -110,10 +105,7 @@ export class YouTubePlayerManager {
               getVolume: () => ytPlayer.getVolume(),
               setVolume: (volume: number) => ytPlayer.setVolume(volume),
               setPlaybackRate: (rate: number) => ytPlayer.setPlaybackRate(rate),
-              getPlaybackRate: () => ytPlayer.getPlaybackRate(),
-              mute: () => ytPlayer.mute(),
-              unMute: () => ytPlayer.unMute(),
-              isMuted: () => ytPlayer.isMuted()
+              getPlaybackRate: () => ytPlayer.getPlaybackRate()
             };
             
             if (this.options.onReady) {
