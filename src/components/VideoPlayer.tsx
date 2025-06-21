@@ -4,9 +4,10 @@ import { YouTubePlayerManager, type YouTubePlayerInstance } from '../utils/youtu
 interface VideoPlayerProps {
   videoId: string
   onPlayerReady?: (player: YouTubePlayerInstance) => void
+  startMuted?: boolean
 }
 
-export default function VideoPlayer({ videoId, onPlayerReady }: VideoPlayerProps) {
+export default function VideoPlayer({ videoId, onPlayerReady, startMuted = true }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const playerManagerRef = useRef<YouTubePlayerManager | null>(null)
   const playerIdRef = useRef<string>(`youtube-player-${Date.now()}`)
@@ -23,7 +24,8 @@ export default function VideoPlayer({ videoId, onPlayerReady }: VideoPlayerProps
       },
       onError: (error) => {
         console.error('YouTube player error:', error)
-      }
+      },
+      startMuted
     })
 
     // Initialize the player
@@ -35,7 +37,7 @@ export default function VideoPlayer({ videoId, onPlayerReady }: VideoPlayerProps
         playerManagerRef.current = null
       }
     }
-  }, []) // Only run once on mount
+  }, [startMuted]) // Re-create player if mute preference changes
 
   // Handle video ID changes (skip initial mount)
   useEffect(() => {

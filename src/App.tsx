@@ -29,6 +29,23 @@ function App() {
   const [playerState, setPlayerState] = useState(-1)
   const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
   const [showPlayPrompt, setShowPlayPrompt] = useState(false)
+  // Check localStorage for previous interaction
+  const [hasUserInteracted, setHasUserInteracted] = useState(() => {
+    const stored = localStorage.getItem('userHasInteracted')
+    const lastInteraction = localStorage.getItem('lastInteractionTime')
+    
+    if (stored === 'true') {
+      console.log('User has interacted before - attempting unmuted autoplay')
+      if (lastInteraction) {
+        const daysSinceInteraction = (Date.now() - parseInt(lastInteraction)) / (1000 * 60 * 60 * 24)
+        console.log(`Last interaction: ${daysSinceInteraction.toFixed(1)} days ago`)
+      }
+      return true
+    }
+    
+    console.log('First time user - will start muted')
+    return false
+  })
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -42,17 +59,66 @@ function App() {
     typedTextRef.current = typedText
   }, [typedText])
 
+  // Detect user interaction and persist it
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      if (!hasUserInteracted) {
+        console.log('User interaction detected - saving for future visits')
+        setHasUserInteracted(true)
+        // Store in localStorage for future visits
+        localStorage.setItem('userHasInteracted', 'true')
+        // Also store timestamp of last interaction
+        localStorage.setItem('lastInteractionTime', Date.now().toString())
+        
+        // Remove listeners after first interaction
+        document.removeEventListener('click', handleUserInteraction)
+        document.removeEventListener('keydown', handleUserInteraction)
+        document.removeEventListener('touchstart', handleUserInteraction)
+      }
+    }
+
+    // Only add listeners if user hasn't interacted before
+    if (!hasUserInteracted) {
+      document.addEventListener('click', handleUserInteraction)
+      document.addEventListener('keydown', handleUserInteraction)
+      document.addEventListener('touchstart', handleUserInteraction)
+    }
+
+    return () => {
+      document.removeEventListener('click', handleUserInteraction)
+      document.removeEventListener('keydown', handleUserInteraction)
+      document.removeEventListener('touchstart', handleUserInteraction)
+    }
+  }, [hasUserInteracted])
+
   // Global keyboard handler for typing anywhere
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept any modified keys (Ctrl, Cmd, Alt)
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        return
+      }
+      
+      // Don't intercept function keys or special keys
+      if (e.key.startsWith('F') && e.key.length === 2) { // F1-F12
+        return
+      }
+      
+      // Don't intercept browser shortcuts
+      const browserShortcuts = ['Tab', 'Escape', 'Enter', 'Home', 'End', 'PageUp', 'PageDown']
+      if (browserShortcuts.includes(e.key)) {
+        return
+      }
+      
       // If typing in an input/textarea, don't intercept
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
         return
       }
       
-      // Forward all other keys to the hidden input for typing
-      if (globalInputRef.current && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // Only intercept single character keys and backspace for typing
+      const isTypingKey = e.key.length === 1 || e.key === 'Backspace'
+      if (globalInputRef.current && isTypingKey) {
         e.preventDefault()
         globalInputRef.current.focus()
         
@@ -134,23 +200,32 @@ function App() {
 
   const handlePlayerReady = (player: YouTubePlayerInstance) => {
     console.log('Player ready, attempting to play video')
+    console.log('Has user interacted:', hasUserInteracted)
     playerRef.current = player
     setIsPlayerReady(true)
     
-    // Auto-play the video when ready (starts muted due to browser policies)
-    // Add a small delay to ensure player is fully initialized
+    // Auto-play the video when ready
     setTimeout(() => {
       console.log('Calling playVideo()')
       player.playVideo()
       
-      // Check if play was successful and unmute after starting
+      // Check if play was successful
       setTimeout(() => {
         const state = player.getPlayerState()
         console.log('Player state after play attempt:', state)
+        
         if (state === 1) { // Playing
-          console.log('Video playing, unmuting...')
-          player.setVolume(100)
-          // Note: YouTube API doesn't have direct mute/unmute, but setVolume(0) = muted
+          // If we started muted but user has interacted, unmute now
+          if (!hasUserInteracted && player.isMuted()) {
+            console.log('Video playing muted, unmuting...')
+            player.unMute()
+            // Also ensure volume is at a reasonable level
+            if (player.getVolume() < 50) {
+              player.setVolume(80)
+            }
+          } else {
+            console.log('Video playing with sound (user had interacted)')
+          }
         } else {
           console.log('Autoplay blocked. Showing play prompt...')
           setShowPlayPrompt(true)
@@ -294,14 +369,19 @@ function App() {
       <main className="container mx-auto px-6 py-8 max-w-5xl">
         <div className="space-y-6">
           <div className="relative">
-            <VideoPlayer videoId={currentVideo} onPlayerReady={handlePlayerReady} />
+            <VideoPlayer 
+              videoId={currentVideo} 
+              onPlayerReady={handlePlayerReady}
+              startMuted={!hasUserInteracted}
+            />
             {showPlayPrompt && (
               <div 
                 className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center cursor-pointer rounded-lg"
                 onClick={() => {
                   if (playerRef.current) {
                     playerRef.current.playVideo()
-                    playerRef.current.setVolume(100)
+                    playerRef.current.unMute()
+                    playerRef.current.setVolume(80)
                     setShowPlayPrompt(false)
                   }
                 }}
