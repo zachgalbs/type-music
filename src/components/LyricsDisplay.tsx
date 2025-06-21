@@ -20,7 +20,7 @@ export default function LyricsDisplay({ lyrics, typedText }: LyricsDisplayProps)
       
       return (
         <span key={index} className="relative inline-block" style={{ fontFamily: 'Roboto Mono, monospace' }}>
-          <span className={`text-3xl ${textColor} transition-colors duration-150`}>
+          <span className={`text-3xl ${textColor} transition-colors duration-150 ${isIncorrect && char === ' ' ? 'bg-red-500' : ''}`}>
             {char === ' ' ? '\u00A0' : char}
           </span>
           {isCurrentPosition && (
