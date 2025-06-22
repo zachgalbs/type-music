@@ -50,6 +50,13 @@ export function parseLRC(lrcText: string, options: LrcParserOptions = {}): Lyric
         text = cleanAdLibs(text)
       }
       
+      // Remove punctuation and convert to lowercase for easier typing
+      text = text
+        .toLowerCase() // Convert to lowercase
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()'"?]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ') // Normalize spaces
+        .trim()
+      
       // Only add non-empty lines after cleaning
       if (text.length > 0) {
         const totalSeconds = minutes * 60 + seconds + hundredths / 100
