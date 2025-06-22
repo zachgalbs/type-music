@@ -269,8 +269,10 @@ function App() {
           const currentLyricText = lyricsData[currentProcessedIndex]?.text || ''
           
           if (currentTypedText.length < currentLyricText.length) {
-            playerRef.current.pauseVideo()
-            setIsWaitingForTyping(true)
+            if (!isWaitingForTyping) {
+              playerRef.current.pauseVideo()
+              setIsWaitingForTyping(true)
+            }
             return
           }
           
