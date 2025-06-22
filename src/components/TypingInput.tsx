@@ -64,8 +64,21 @@ const TypingInput = forwardRef<HTMLInputElement, TypingInputProps>(({ targetText
   }, [typedText, startTime, targetText, onStatsUpdate])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Debug logging
+    if (e.key === 'Backspace') {
+      console.log('TypingInput: Backspace detected', {
+        key: e.key,
+        altKey: e.altKey,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        currentPosition,
+        typedTextLength: typedText.length
+      })
+    }
+    
     // Don't prevent default for modifier key combinations - let them pass through
-    if (e.ctrlKey || e.metaKey || e.altKey) {
+    // EXCEPT for Alt+Backspace which we want to handle for word deletion
+    if ((e.ctrlKey || e.metaKey) || (e.altKey && e.key !== 'Backspace')) {
       return // Let browser handle shortcuts like Cmd+R
     }
     

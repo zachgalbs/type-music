@@ -117,6 +117,15 @@ function App() {
         e.preventDefault()
         globalInputRef.current.focus()
         
+        // Debug logging for Option+Backspace
+        if (e.key === 'Backspace' && e.altKey) {
+          console.log('Global handler: Option+Backspace detected', {
+            key: e.key,
+            altKey: e.altKey,
+            code: e.code
+          })
+        }
+        
         // Simulate the keydown event on the hidden input
         const newEvent = new KeyboardEvent('keydown', {
           key: e.key,
@@ -124,6 +133,9 @@ function App() {
           keyCode: e.keyCode,
           which: e.which,
           shiftKey: e.shiftKey,
+          altKey: e.altKey,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
           bubbles: true
         })
         globalInputRef.current.dispatchEvent(newEvent)
