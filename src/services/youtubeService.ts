@@ -90,10 +90,13 @@ export class YouTubeService {
   async searchBestMatch(trackName: string, artistName: string): Promise<string | null> {
     try {
       // Try different search queries in order of specificity
+      // Put quotes around track name for more exact matching
       const queries = [
+        `"${trackName}" ${artistName} official music video`,
+        `${artistName} - ${trackName} official`,
+        `"${trackName}" ${artistName} official video`,
+        `${artistName} "${trackName}"`,
         `${trackName} ${artistName} official music video`,
-        `${trackName} ${artistName} official video`,
-        `${trackName} ${artistName} music video`,
         `${trackName} ${artistName} official`,
         `${trackName} ${artistName}`
       ];
@@ -146,21 +149,46 @@ export class YouTubeService {
     const track = trackName.toLowerCase();
     const artist = artistName.toLowerCase();
 
-    // Exact matches in title (highest priority)
-    if (title.includes(track)) score += 20;
-    if (title.includes(artist)) score += 20;
+    // Check for exact match of "Artist - Track" pattern (highest priority)
+    const exactPattern1 = `${artist} - ${track}`;
+    const exactPattern2 = `${artist}: ${track}`;
+    const exactPattern3 = `${artist} "${track}"`;
+    const exactPattern4 = `${artist} '${track}'`;
+    
+    if (title.includes(exactPattern1) || title.includes(exactPattern2) || 
+        title.includes(exactPattern3) || title.includes(exactPattern4)) {
+      score += 50; // Very high score for exact pattern match
+    }
 
-    // Partial word matches in title
-    const trackWords = track.split(/\s+/).filter(word => word.length > 2);
-    const artistWords = artist.split(/\s+/).filter(word => word.length > 2);
-
-    trackWords.forEach(word => {
-      if (title.includes(word)) score += 5;
+    // Check if track name appears as a distinct element (not part of another word)
+    // This is especially important for short track names like "8"
+    const titleWords = title.split(/[\s\-–—:,\(\)\[\]"']+/);
+    const trackWords = track.split(/\s+/);
+    
+    // Check for exact word matches (case-insensitive)
+    trackWords.forEach(trackWord => {
+      if (titleWords.includes(trackWord)) {
+        score += 30; // High score for exact word match
+      } else if (title.includes(track)) {
+        score += 15; // Lower score for substring match
+      }
     });
 
-    artistWords.forEach(word => {
-      if (title.includes(word)) score += 5;
-      if (channel.includes(word)) score += 8; // Artist name in channel is good
+    // Artist name matching
+    if (title.includes(artist)) score += 20;
+    if (channel.includes(artist)) score += 15;
+
+    // Partial word matches for longer track/artist names
+    const trackWordsLong = track.split(/\s+/).filter(word => word.length > 2);
+    const artistWordsLong = artist.split(/\s+/).filter(word => word.length > 2);
+
+    trackWordsLong.forEach(word => {
+      if (title.includes(word) && !titleWords.includes(word)) score += 3;
+    });
+
+    artistWordsLong.forEach(word => {
+      if (title.includes(word) && !title.includes(artist)) score += 3;
+      if (channel.includes(word) && !channel.includes(artist)) score += 5;
     });
 
     // Official content indicators

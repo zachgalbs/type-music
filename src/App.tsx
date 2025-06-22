@@ -16,8 +16,8 @@ import { lyricsService } from './services/lyricsService'
 import { youtubeService } from './services/youtubeService'
 
 function App() {
-  const [currentVideo, setCurrentVideo] = useState('dQw4w9WgXcQ')
-  const [currentTrack, setCurrentTrack] = useState({ trackName: 'Never Gonna Give You Up', artistName: 'Rick Astley' })
+  const [currentVideo, setCurrentVideo] = useState('YVkUvmDQ3HY')
+  const [currentTrack, setCurrentTrack] = useState({ trackName: 'Without Me', artistName: 'Eminem' })
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [wpm, setWpm] = useState(0)
   const [accuracy, setAccuracy] = useState(100)
@@ -99,14 +99,29 @@ function App() {
         return
       }
       
-      // Handle sync offset adjustment
-      if (e.key === '[' || e.key === ']') {
+      // Handle sync offset adjustment using code property for consistency
+      if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+        console.log('Sync offset key detected:', {
+          key: e.key,
+          code: e.code,
+          shiftKey: e.shiftKey,
+          adjustment: e.shiftKey ? 1.0 : 0.1
+        })
         e.preventDefault()
         const adjustment = e.shiftKey ? 1.0 : 0.1 // Shift for larger adjustments
-        if (e.key === '[') {
-          setSyncOffset(prev => Math.round((prev - adjustment) * 10) / 10)
-        } else {
-          setSyncOffset(prev => Math.round((prev + adjustment) * 10) / 10)
+        
+        if (e.code === 'BracketLeft') {
+          setSyncOffset(prev => {
+            const newOffset = Math.round((prev - adjustment) * 10) / 10
+            console.log('Decreasing offset:', prev, '->', newOffset)
+            return newOffset
+          })
+        } else if (e.code === 'BracketRight') {
+          setSyncOffset(prev => {
+            const newOffset = Math.round((prev + adjustment) * 10) / 10
+            console.log('Increasing offset:', prev, '->', newOffset)
+            return newOffset
+          })
         }
         return
       }
@@ -239,7 +254,8 @@ function App() {
         }
         
         // FIRST: Check if we should pause at the next lyric's timestamp (before advancing)
-        if (currentLyricIndex >= 0 && !isWaitingForTyping) {
+        // Only check if video is playing (state 1)
+        if (currentLyricIndex >= 0 && !isWaitingForTyping && currentPlayerState === 1) {
           const nextLyricIndex = currentLyricIndex + 1
           if (nextLyricIndex < lyricsData.length) {
             const nextLyricTime = lyricsData[nextLyricIndex].time
@@ -281,7 +297,7 @@ function App() {
           const currentLyricText = lyricsData[currentProcessedIndex]?.text || ''
           
           if (currentTypedText.length < currentLyricText.length) {
-            if (!isWaitingForTyping) {
+            if (!isWaitingForTyping && currentPlayerState === 1) {
               playerRef.current.pauseVideo()
               setIsWaitingForTyping(true)
             }
@@ -365,7 +381,7 @@ function App() {
     setShowApiKeyPrompt(false)
     
     // Retry the search if we have a pending track
-    if (currentTrack.trackName !== 'Never Gonna Give You Up') {
+    if (currentTrack.trackName !== 'Without Me') {
       searchAndLoadTrack(currentTrack)
     }
   }
