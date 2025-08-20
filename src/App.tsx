@@ -180,7 +180,7 @@ function App() {
       // Handle debug panel toggle (D key)
       if (e.code === 'KeyD' && e.shiftKey) {
         e.preventDefault()
-        setShowDebugPanel(prev => {
+        setShowDebugPanel((prev: boolean) => {
           const newValue = !prev
           localStorage.setItem('showDebugPanel', JSON.stringify(newValue))
           console.log('Debug panel:', newValue ? 'ON' : 'OFF')
