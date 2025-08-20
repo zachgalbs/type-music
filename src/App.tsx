@@ -9,6 +9,7 @@ import SearchModal from './components/SearchModal'
 import ExtensionRecommendation from './components/ExtensionRecommendation'
 import ApiKeyPrompt from './components/ApiKeyPrompt'
 import SyncOffsetIndicator from './components/SyncOffsetIndicator'
+import DebugPanel from './components/DebugPanel'
 import type { YouTubePlayerInstance } from './utils/youtubePlayer'
 import { parseLRC, getCurrentLyricIndex, type LyricLine } from './utils/lrcParser'
 import { RICK_ASTLEY_LRC } from './data/sampleLyrics'
@@ -42,6 +43,11 @@ function App() {
     const stored = localStorage.getItem('removeAdLibs')
     return stored ? JSON.parse(stored) : true // Default to true (remove ad-libs)
   })
+  const [videoTime, setVideoTime] = useState(0)
+  const [showDebugPanel, setShowDebugPanel] = useState(() => {
+    const stored = localStorage.getItem('showDebugPanel')
+    return stored ? JSON.parse(stored) : false
+  })
   const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const syncIntervalRef = useRef<number | null>(null)
   const lastProcessedIndex = useRef<number>(-1)
@@ -49,11 +55,17 @@ function App() {
   const pauseTimeoutRef = useRef<number | null>(null)
   const typedTextRef = useRef<string>('')
   const globalInputRef = useRef<HTMLInputElement | null>(null)
+  const previousOffsetRef = useRef<number>(syncOffset)
+  const isWaitingForTypingRef = useRef<boolean>(false)
 
-  // Keep ref updated with typedText changes
+  // Keep refs updated with state changes
   useEffect(() => {
     typedTextRef.current = typedText
   }, [typedText])
+  
+  useEffect(() => {
+    isWaitingForTypingRef.current = isWaitingForTyping
+  }, [isWaitingForTyping])
 
   // Check if typing is complete and resume video
   useEffect(() => {
@@ -67,6 +79,72 @@ function App() {
   useEffect(() => {
     localStorage.setItem(`syncOffset_${currentVideo}`, syncOffset.toString())
   }, [syncOffset, currentVideo])
+  
+  // Check if offset change should resume video (only when offset actually changes)
+  useEffect(() => {
+    // Only run if offset actually changed value
+    if (syncOffset === previousOffsetRef.current) {
+      return
+    }
+    
+    console.log('Sync offset actually changed:', previousOffsetRef.current, '->', syncOffset)
+    previousOffsetRef.current = syncOffset
+    
+    // If waiting for typing, check if offset change should affect playback
+    if (isWaitingForTyping && playerRef.current && lyricsData.length > 0) {
+      const currentTime = playerRef.current.getCurrentTime()
+      const adjustedTime = currentTime + 0.3 - syncOffset // Same calculation as sync logic
+      const expectedIndex = getCurrentLyricIndex(lyricsData, adjustedTime)
+      
+      console.log('Checking if offset change should resume:', {
+        currentTime,
+        syncOffset,
+        adjustedTime,
+        currentLyricIndex,
+        expectedIndex,
+        playerState: playerRef.current.getPlayerState()
+      })
+      
+      // Check if we should change lyrics based on new timing
+      if (expectedIndex !== currentLyricIndex && expectedIndex >= 0 && expectedIndex < lyricsData.length) {
+        // Jump to the expected lyric
+        console.log('Jumping to lyric:', expectedIndex)
+        setCurrentLyricIndex(expectedIndex)
+        setCurrentLyrics(lyricsData[expectedIndex].text)
+        lastProcessedIndex.current = expectedIndex
+        setTypedText('')
+        typedTextRef.current = ''
+        setIsWaitingForTyping(false)
+        playerRef.current.playVideo()
+      } else if (expectedIndex === currentLyricIndex) {
+        // Same lyric index, but check if we're past the next lyric's start time
+        const nextLyric = lyricsData[currentLyricIndex + 1]
+        if (nextLyric && adjustedTime >= nextLyric.time) {
+          // We should be at the next lyric already
+          console.log('Time passed next lyric, advancing')
+          const newIndex = currentLyricIndex + 1
+          setCurrentLyricIndex(newIndex)
+          setCurrentLyrics(lyricsData[newIndex].text)
+          lastProcessedIndex.current = newIndex
+          setTypedText('')
+          typedTextRef.current = ''
+          setIsWaitingForTyping(false)
+          playerRef.current.playVideo()
+        } else {
+          // Check if offset is large enough that we should just resume
+          const currentLyric = lyricsData[currentLyricIndex]
+          const timeSinceLyricStart = adjustedTime - currentLyric.time
+          
+          // If we're more than 2 seconds past the lyric start, resume anyway
+          if (timeSinceLyricStart > 2.0) {
+            console.log('Far past lyric start, resuming playback')
+            setIsWaitingForTyping(false)
+            playerRef.current.playVideo()
+          }
+        }
+      }
+    }
+  }, [syncOffset]) // Only run when offset changes
 
   // Load sync offset when video changes
   useEffect(() => {
@@ -99,6 +177,18 @@ function App() {
         return
       }
       
+      // Handle debug panel toggle (D key)
+      if (e.code === 'KeyD' && e.shiftKey) {
+        e.preventDefault()
+        setShowDebugPanel(prev => {
+          const newValue = !prev
+          localStorage.setItem('showDebugPanel', JSON.stringify(newValue))
+          console.log('Debug panel:', newValue ? 'ON' : 'OFF')
+          return newValue
+        })
+        return
+      }
+      
       // Handle sync offset adjustment using code property for consistency
       if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
         console.log('Sync offset key detected:', {
@@ -113,14 +203,16 @@ function App() {
         if (e.code === 'BracketLeft') {
           setSyncOffset(prev => {
             const newOffset = Math.round((prev - adjustment) * 10) / 10
-            console.log('Decreasing offset:', prev, '->', newOffset)
-            return newOffset
+            const clamped = Math.max(-30, Math.min(30, newOffset))
+            console.log('Decreasing offset:', prev, '->', clamped)
+            return clamped
           })
         } else if (e.code === 'BracketRight') {
           setSyncOffset(prev => {
             const newOffset = Math.round((prev + adjustment) * 10) / 10
-            console.log('Increasing offset:', prev, '->', newOffset)
-            return newOffset
+            const clamped = Math.max(-30, Math.min(30, newOffset))
+            console.log('Increasing offset:', prev, '->', clamped)
+            return clamped
           })
         }
         return
@@ -242,9 +334,12 @@ function App() {
     syncIntervalRef.current = window.setInterval(() => {
       if (playerRef.current && lyricsData.length > 0) {
         const currentTime = playerRef.current.getCurrentTime()
+        setVideoTime(currentTime) // Update video time for debug panel
         // Add 300ms buffer - advance lyrics 300ms before actual timestamp
         const LYRIC_ADVANCE_BUFFER = 0.3
-        const adjustedTime = currentTime + LYRIC_ADVANCE_BUFFER + syncOffset
+        // Positive offset = delay lyrics (they appear later in video time)
+        // So subtract offset to get the effective lyric lookup time
+        const adjustedTime = currentTime + LYRIC_ADVANCE_BUFFER - syncOffset
         const newIndex = getCurrentLyricIndex(lyricsData, adjustedTime)
         
         // Update player state
@@ -253,20 +348,51 @@ function App() {
           setPlayerState(currentPlayerState)
         }
         
+        // Safeguard: If video is playing but we think we're waiting, fix the state
+        if (currentPlayerState === 1 && isWaitingForTypingRef.current) {
+          console.log('WARNING: Video playing but waiting flag is set, clearing it')
+          setIsWaitingForTyping(false)
+        }
+        
         // FIRST: Check if we should pause at the next lyric's timestamp (before advancing)
         // Only check if video is playing (state 1)
-        if (currentLyricIndex >= 0 && !isWaitingForTyping && currentPlayerState === 1) {
-          const nextLyricIndex = currentLyricIndex + 1
+        // Use lastProcessedIndex as source of truth
+        const currentIndex = lastProcessedIndex.current
+        if (currentIndex >= 0 && !isWaitingForTypingRef.current && currentPlayerState === 1) {
+          const nextLyricIndex = currentIndex + 1
           if (nextLyricIndex < lyricsData.length) {
             const nextLyricTime = lyricsData[nextLyricIndex].time
             const currentTypedText = typedTextRef.current
+            // Get the actual current lyric text from data, not state
+            const currentLyricText = lyricsData[currentIndex]?.text || ''
             
-            // Add buffer to pause slightly before the next lyric starts
-            const timeBuffer = 0.3
+            // Debug logging for pause check
+            const shouldPause = adjustedTime >= nextLyricTime && currentTypedText.length < currentLyricText.length
             
-            // Pause if we've reached the next lyric time and user hasn't finished typing current lyric
-            if (currentTime + syncOffset >= (nextLyricTime - timeBuffer) && currentTypedText.length < currentLyrics.length) {
-              console.log('Pausing at timestamp - unfinished typing')
+            if (Math.abs(adjustedTime - nextLyricTime) < 1) { // Log when close to next lyric
+              console.log('Near next lyric:', {
+                adjustedTime: adjustedTime.toFixed(2),
+                nextLyricTime: nextLyricTime.toFixed(2),
+                shouldPause,
+                typed: currentTypedText.length,
+                total: currentLyricText.length,
+                currentIndex
+              })
+            }
+            
+            // Use the same adjusted time as lyric selection
+            // Pause if adjusted time reaches next lyric and user hasn't finished current
+            if (shouldPause) {
+              console.log('Pausing at timestamp - unfinished typing', {
+                currentTime,
+                syncOffset,
+                adjustedTime,
+                nextLyricTime,
+                timeUntilNext: nextLyricTime - adjustedTime,
+                typedLength: currentTypedText.length,
+                lyricLength: currentLyricText.length,
+                currentIndex
+              })
               playerRef.current.pauseVideo()
               setIsWaitingForTyping(true)
               return // Don't advance to next lyric yet
@@ -279,7 +405,8 @@ function App() {
         const currentProcessedIndex = lastProcessedIndex.current
         const shouldProcessNewIndex = newIndex >= 0 && newIndex !== currentProcessedIndex
         
-        if (shouldProcessNewIndex) {
+        // Don't process new index if we're waiting for typing
+        if (shouldProcessNewIndex && !isWaitingForTypingRef.current) {
           const currentTypedText = typedTextRef.current
           
           // If we're at the initial state (-1), advance to first lyric (0) immediately
@@ -296,12 +423,28 @@ function App() {
           // For normal lyric advancement, check if user finished current lyric
           const currentLyricText = lyricsData[currentProcessedIndex]?.text || ''
           
+          // Only pause if we haven't typed enough AND we're actually at this lyric's time
           if (currentTypedText.length < currentLyricText.length) {
-            if (!isWaitingForTyping && currentPlayerState === 1) {
-              playerRef.current.pauseVideo()
-              setIsWaitingForTyping(true)
+            // Check if we're past this lyric's reasonable display time
+            const currentLyricTime = lyricsData[currentProcessedIndex]?.time || 0
+            const timeSinceStart = adjustedTime - currentLyricTime
+            
+            // Only skip if we're not already waiting and way past the lyric
+            // Don't skip if we're paused - let the user type!
+            if (timeSinceStart > 3.0 && !isWaitingForTypingRef.current && currentPlayerState === 1) {
+              console.log('Skipping untyped lyric - too far past', { timeSinceStart })
+              // Continue to advance logic below
+            } else {
+              // Normal pause for typing (or already paused)
+              if (!isWaitingForTypingRef.current && currentPlayerState === 1) {
+                console.log('Pausing for typing')
+                playerRef.current.pauseVideo()
+                setIsWaitingForTyping(true)
+              } else if (isWaitingForTypingRef.current) {
+                console.log('Already waiting, maintaining pause')
+              }
+              return
             }
-            return
           }
           
           // User finished current lyric, advance to next
@@ -483,13 +626,34 @@ function App() {
         onTrackSelect={searchAndLoadTrack}
       />
 
-      <SyncOffsetIndicator offset={syncOffset} />
+      <SyncOffsetIndicator 
+        offset={syncOffset} 
+        onAdjust={(delta) => {
+          const newOffset = Math.round((syncOffset + delta) * 10) / 10
+          // Clamp offset to reasonable range (-30s to +30s)
+          setSyncOffset(Math.max(-30, Math.min(30, newOffset)))
+        }}
+        onReset={() => setSyncOffset(0)}
+      />
 
       <ApiKeyPrompt
         isOpen={showApiKeyPrompt}
         onSubmit={handleApiKeySubmit}
         onCancel={() => setShowApiKeyPrompt(false)}
       />
+      
+      {showDebugPanel && (
+        <DebugPanel
+          videoTime={videoTime}
+          syncOffset={syncOffset}
+          currentLyricIndex={currentLyricIndex}
+          lyricsData={lyricsData}
+          isWaitingForTyping={isWaitingForTyping}
+          playerState={playerState}
+          typedText={typedText}
+          currentLyrics={currentLyrics}
+        />
+      )}
     </div>
   )
 }
