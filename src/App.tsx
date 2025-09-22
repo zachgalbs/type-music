@@ -17,8 +17,13 @@ import { lyricsService } from './services/lyricsService'
 import { youtubeService } from './services/youtubeService'
 
 function App() {
-  const [currentVideo, setCurrentVideo] = useState('YVkUvmDQ3HY')
-  const [currentTrack, setCurrentTrack] = useState({ trackName: 'Without Me', artistName: 'Eminem' })
+  const sanitizeOffset = (value: number) => {
+    const clamped = Math.min(3, Math.max(-3, value))
+    return Math.round(clamped * 10) / 10
+  }
+
+  const [currentVideo, setCurrentVideo] = useState('5TlZeem3FU8')
+  const [currentTrack, setCurrentTrack] = useState({ trackName: 'Rhymes Like Dimes', artistName: 'MF DOOM' })
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [wpm, setWpm] = useState(0)
   const [accuracy, setAccuracy] = useState(100)
@@ -37,7 +42,8 @@ function App() {
   const [showApiKeyPrompt, setShowApiKeyPrompt] = useState(false)
   const [syncOffset, setSyncOffset] = useState(() => {
     const stored = localStorage.getItem(`syncOffset_${currentVideo}`)
-    return stored ? parseFloat(stored) : 0
+    const parsed = stored ? parseFloat(stored) : 0
+    return Number.isNaN(parsed) ? 0 : sanitizeOffset(parsed)
   })
   const [removeAdLibs, setRemoveAdLibs] = useState(() => {
     const stored = localStorage.getItem('removeAdLibs')
@@ -149,7 +155,8 @@ function App() {
   // Load sync offset when video changes
   useEffect(() => {
     const stored = localStorage.getItem(`syncOffset_${currentVideo}`)
-    setSyncOffset(stored ? parseFloat(stored) : 0)
+    const parsed = stored ? parseFloat(stored) : 0
+    setSyncOffset(Number.isNaN(parsed) ? 0 : sanitizeOffset(parsed))
   }, [currentVideo])
 
   // Global keyboard handler for typing anywhere
@@ -203,16 +210,14 @@ function App() {
         if (e.code === 'BracketLeft') {
           setSyncOffset(prev => {
             const newOffset = Math.round((prev - adjustment) * 10) / 10
-            const clamped = Math.max(-30, Math.min(30, newOffset))
-            console.log('Decreasing offset:', prev, '->', clamped)
-            return clamped
+            console.log('Decreasing offset:', prev, '->', newOffset)
+            return sanitizeOffset(newOffset)
           })
         } else if (e.code === 'BracketRight') {
           setSyncOffset(prev => {
             const newOffset = Math.round((prev + adjustment) * 10) / 10
-            const clamped = Math.max(-30, Math.min(30, newOffset))
-            console.log('Increasing offset:', prev, '->', clamped)
-            return clamped
+            console.log('Increasing offset:', prev, '->', newOffset)
+            return sanitizeOffset(newOffset)
           })
         }
         return
@@ -535,6 +540,10 @@ function App() {
     handleReset() // Reset typing state when changing ad-lib setting
   }
 
+  const handleSyncOffsetChange = (value: number) => {
+    setSyncOffset(sanitizeOffset(value))
+  }
+
 
   useEffect(() => {
     return () => {
@@ -615,6 +624,8 @@ function App() {
             isLoadingLyrics={isLoadingLyrics}
             removeAdLibs={removeAdLibs}
             onAdLibToggle={handleAdLibToggle}
+            syncOffset={syncOffset}
+            onSyncOffsetChange={handleSyncOffsetChange}
           />
         </div>
       </main>
@@ -626,15 +637,7 @@ function App() {
         onTrackSelect={searchAndLoadTrack}
       />
 
-      <SyncOffsetIndicator 
-        offset={syncOffset} 
-        onAdjust={(delta) => {
-          const newOffset = Math.round((syncOffset + delta) * 10) / 10
-          // Clamp offset to reasonable range (-30s to +30s)
-          setSyncOffset(Math.max(-30, Math.min(30, newOffset)))
-        }}
-        onReset={() => setSyncOffset(0)}
-      />
+      <SyncOffsetIndicator offset={syncOffset} />
 
       <ApiKeyPrompt
         isOpen={showApiKeyPrompt}
