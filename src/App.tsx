@@ -7,7 +7,6 @@ import TypingInput from './components/TypingInput'
 import ActionButtons from './components/ActionButtons'
 import SearchModal from './components/SearchModal'
 import ExtensionRecommendation from './components/ExtensionRecommendation'
-import ApiKeyPrompt from './components/ApiKeyPrompt'
 import SyncOffsetIndicator from './components/SyncOffsetIndicator'
 import DebugPanel from './components/DebugPanel'
 import type { YouTubePlayerInstance } from './utils/youtubePlayer'
@@ -22,8 +21,8 @@ function App() {
     return Math.round(clamped * 10) / 10
   }
 
-  const [currentVideo, setCurrentVideo] = useState('5TlZeem3FU8')
-  const [currentTrack, setCurrentTrack] = useState({ trackName: 'Rhymes Like Dimes', artistName: 'MF DOOM' })
+  const [currentVideo, setCurrentVideo] = useState('E8gmARGvPlI')
+  const [currentTrack, setCurrentTrack] = useState({ trackName: 'Last Christmas', artistName: 'Wham!' })
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [wpm, setWpm] = useState(0)
   const [accuracy, setAccuracy] = useState(100)
@@ -39,7 +38,7 @@ function App() {
   const [isWaitingForTyping, setIsWaitingForTyping] = useState(false)
   const [playerState, setPlayerState] = useState(-1)
   const [currentPage, setCurrentPage] = useState<'practice' | 'extension'>('practice')
-  const [showApiKeyPrompt, setShowApiKeyPrompt] = useState(false)
+  const [videoSearchError, setVideoSearchError] = useState<string | null>(null)
   const [syncOffset, setSyncOffset] = useState(() => {
     const stored = localStorage.getItem(`syncOffset_${currentVideo}`)
     const parsed = stored ? parseFloat(stored) : 0
@@ -275,14 +274,6 @@ function App() {
     fetchLyrics()
   }, [currentTrack, removeAdLibs])
 
-  // Initialize YouTube API key on app startup
-  useEffect(() => {
-    const storedApiKey = localStorage.getItem('youtube_api_key')
-    if (storedApiKey) {
-      youtubeService.setApiKey(storedApiKey)
-    }
-  }, [])
-
   const fetchLyrics = async () => {
     setIsLoadingLyrics(true)
     setLyricsError(null)
@@ -489,15 +480,7 @@ function App() {
 
   const searchAndLoadTrack = async (track: { trackName: string; artistName: string }) => {
     setCurrentTrack(track)
-    
-    // Check if YouTube API key is set
-    const apiKey = localStorage.getItem('youtube_api_key')
-    if (!apiKey) {
-      setShowApiKeyPrompt(true)
-      return
-    }
-    
-    youtubeService.setApiKey(apiKey)
+    setVideoSearchError(null)
     setIsSearchingVideo(true)
     
     try {
@@ -509,29 +492,18 @@ function App() {
         setCurrentVideo(videoId)
       } else {
         console.warn(`No video found for ${track.artistName} - ${track.trackName}, keeping current video`)
+        setVideoSearchError('No matching YouTube video found.')
       }
     } catch (error) {
       console.error('Error searching for video:', error)
-      if (error instanceof Error && error.message.includes('API key')) {
-        setShowApiKeyPrompt(true)
-      }
+      const message = error instanceof Error ? error.message : 'Failed to search YouTube.'
+      setVideoSearchError(message)
     } finally {
       setIsSearchingVideo(false)
     }
-    
+
     // Reset typing state when switching songs
     handleReset()
-  }
-
-  const handleApiKeySubmit = (apiKey: string) => {
-    localStorage.setItem('youtube_api_key', apiKey)
-    youtubeService.setApiKey(apiKey)
-    setShowApiKeyPrompt(false)
-    
-    // Retry the search if we have a pending track
-    if (currentTrack.trackName !== 'Without Me') {
-      searchAndLoadTrack(currentTrack)
-    }
   }
 
   const handleAdLibToggle = (enabled: boolean) => {
@@ -589,6 +561,11 @@ function App() {
                 Searching YouTube for matching video...
               </div>
             )}
+            {videoSearchError && (
+              <div className="text-center text-red-400 text-sm">
+                {videoSearchError}
+              </div>
+            )}
             {lyricsError && (
               <div className="text-center text-amber-400 text-sm">
                 {lyricsError} - Using sample lyrics as fallback
@@ -639,12 +616,6 @@ function App() {
 
       <SyncOffsetIndicator offset={syncOffset} />
 
-      <ApiKeyPrompt
-        isOpen={showApiKeyPrompt}
-        onSubmit={handleApiKeySubmit}
-        onCancel={() => setShowApiKeyPrompt(false)}
-      />
-      
       {showDebugPanel && (
         <DebugPanel
           videoTime={videoTime}

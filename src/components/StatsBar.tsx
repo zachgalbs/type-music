@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface StatsBarProps {
   wpm: number
@@ -8,7 +8,7 @@ interface StatsBarProps {
 
 export default function StatsBar({ wpm }: StatsBarProps) {
   const [isVisible, setIsVisible] = useState(false)
-  const [hideTimeout, setHideTimeout] = useState<number | null>(null)
+  const hideTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
     // Show WPM when it's greater than 0 (user is typing)
@@ -16,21 +16,22 @@ export default function StatsBar({ wpm }: StatsBarProps) {
       setIsVisible(true)
       
       // Clear any existing hide timeout
-      if (hideTimeout) {
-        clearTimeout(hideTimeout)
+      if (hideTimeoutRef.current !== null) {
+        window.clearTimeout(hideTimeoutRef.current)
       }
       
       // Set new timeout to hide after 2 seconds of no typing
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         setIsVisible(false)
       }, 2000)
       
-      setHideTimeout(timeout)
+      hideTimeoutRef.current = timeout
     }
     
     return () => {
-      if (hideTimeout) {
-        clearTimeout(hideTimeout)
+      if (hideTimeoutRef.current !== null) {
+        window.clearTimeout(hideTimeoutRef.current)
+        hideTimeoutRef.current = null
       }
     }
   }, [wpm])

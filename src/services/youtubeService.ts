@@ -12,23 +12,19 @@ interface YouTubeSearchResult {
   duration?: string;
 }
 
-interface YouTubeApiResponse {
+interface YouTubeProxyResponse {
   items: {
-    id: { videoId: string };
-    snippet: {
-      title: string;
-      channelTitle: string;
-      description: string;
-      thumbnails: {
-        default: { url: string; width: number; height: number };
-        medium: { url: string; width: number; height: number };
-        high: { url: string; width: number; height: number };
-      };
-      publishedAt: string;
+    videoId: string;
+    title: string;
+    channelTitle: string;
+    description: string;
+    thumbnails: {
+      default: { url: string; width: number; height: number };
+      medium: { url: string; width: number; height: number };
+      high: { url: string; width: number; height: number };
     };
-    contentDetails?: {
-      duration: string;
-    };
+    publishedAt: string;
+    duration?: string;
   }[];
   pageInfo: {
     totalResults: number;
@@ -37,48 +33,39 @@ interface YouTubeApiResponse {
 }
 
 export class YouTubeService {
-  private apiKey: string = '';
-  private readonly baseUrl = 'https://www.googleapis.com/youtube/v3';
+  private readonly searchEndpoint: string;
 
-  setApiKey(key: string): void {
-    this.apiKey = key;
+  constructor() {
+    const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+    this.searchEndpoint = `${apiBase}/api/youtube/search`;
   }
 
   async searchVideos(query: string, maxResults: number = 10): Promise<YouTubeSearchResult[]> {
-    if (!this.apiKey) {
-      throw new Error('YouTube API key not set. Call setApiKey() first.');
-    }
-
     try {
       const searchParams = new URLSearchParams({
-        part: 'snippet',
         q: query,
-        type: 'video',
-        maxResults: maxResults.toString(),
-        key: this.apiKey,
-        videoEmbeddable: 'true', // Only return embeddable videos
-        order: 'relevance'
+        maxResults: Math.min(Math.max(maxResults, 1), 10).toString()
       });
 
-      const response = await fetch(`${this.baseUrl}/search?${searchParams}`);
+      const response = await fetch(`${this.searchEndpoint}?${searchParams.toString()}`);
       
       if (!response.ok) {
         if (response.status === 403) {
-          throw new Error('YouTube API quota exceeded or invalid API key');
+          throw new Error('YouTube API quota exceeded or server API key misconfigured');
         }
         throw new Error(`YouTube API error: ${response.status} ${response.statusText}`);
       }
 
-      const data: YouTubeApiResponse = await response.json();
+      const data: YouTubeProxyResponse = await response.json();
 
       return data.items.map(item => ({
-        videoId: item.id.videoId,
-        title: item.snippet.title,
-        channelTitle: item.snippet.channelTitle,
-        description: item.snippet.description,
-        thumbnails: item.snippet.thumbnails,
-        publishedAt: item.snippet.publishedAt,
-        duration: item.contentDetails?.duration
+        videoId: item.videoId,
+        title: item.title,
+        channelTitle: item.channelTitle,
+        description: item.description,
+        thumbnails: item.thumbnails,
+        publishedAt: item.publishedAt,
+        duration: item.duration
       }));
 
     } catch (error) {
@@ -220,22 +207,6 @@ export class YouTubeService {
     return Math.max(0, score); // Don't return negative scores
   }
 
-  // Utility method to validate API key format
-  isValidApiKey(key: string): boolean {
-    // YouTube API keys are typically 39 characters long and contain alphanumeric characters and hyphens/underscores
-    return /^[A-Za-z0-9_-]{35,45}$/.test(key);
-  }
-
-  // Test the API connection
-  async testConnection(): Promise<boolean> {
-    try {
-      await this.searchVideos('test', 1);
-      return true;
-    } catch (error) {
-      console.error('YouTube API connection test failed:', error);
-      return false;
-    }
-  }
 }
 
 export const youtubeService = new YouTubeService();
