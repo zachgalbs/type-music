@@ -41,8 +41,8 @@ function App() {
   const [videoSearchError, setVideoSearchError] = useState<string | null>(null)
   const [syncOffset, setSyncOffset] = useState(() => {
     const stored = localStorage.getItem(`syncOffset_${currentVideo}`)
-    const parsed = stored ? parseFloat(stored) : 0
-    return Number.isNaN(parsed) ? 0 : sanitizeOffset(parsed)
+    const parsed = stored ? parseFloat(stored) : 0.5
+    return Number.isNaN(parsed) ? 0.5 : sanitizeOffset(parsed)
   })
   const [removeAdLibs, setRemoveAdLibs] = useState(() => {
     const stored = localStorage.getItem('removeAdLibs')
@@ -154,8 +154,8 @@ function App() {
   // Load sync offset when video changes
   useEffect(() => {
     const stored = localStorage.getItem(`syncOffset_${currentVideo}`)
-    const parsed = stored ? parseFloat(stored) : 0
-    setSyncOffset(Number.isNaN(parsed) ? 0 : sanitizeOffset(parsed))
+    const parsed = stored ? parseFloat(stored) : 0.5
+    setSyncOffset(Number.isNaN(parsed) ? 0.5 : sanitizeOffset(parsed))
   }, [currentVideo])
 
   // Global keyboard handler for typing anywhere
