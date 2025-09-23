@@ -114,6 +114,15 @@ function App() {
       if (expectedIndex !== currentLyricIndex && expectedIndex >= 0 && expectedIndex < lyricsData.length) {
         // Jump to the expected lyric
         console.log('Jumping to lyric:', expectedIndex)
+        const targetLyric = lyricsData[expectedIndex]
+        const targetLyricTime = targetLyric?.time ?? 0
+        console.log('Lyric sync (offset adjust -> jump)', {
+          videoTime: currentTime.toFixed(2),
+          lyricTimestamp: targetLyricTime.toFixed(2),
+          adjustedTime: adjustedTime.toFixed(2),
+          lyricIndex: expectedIndex,
+          lyric: targetLyric?.text || ''
+        })
         setCurrentLyricIndex(expectedIndex)
         setCurrentLyrics(lyricsData[expectedIndex].text)
         lastProcessedIndex.current = expectedIndex
@@ -128,6 +137,15 @@ function App() {
           // We should be at the next lyric already
           console.log('Time passed next lyric, advancing')
           const newIndex = currentLyricIndex + 1
+          const advancedLyric = lyricsData[newIndex]
+          const advancedLyricTime = advancedLyric?.time ?? 0
+          console.log('Lyric sync (offset adjust -> advance)', {
+            videoTime: currentTime.toFixed(2),
+            lyricTimestamp: advancedLyricTime.toFixed(2),
+            adjustedTime: adjustedTime.toFixed(2),
+            lyricIndex: newIndex,
+            lyric: advancedLyric?.text || ''
+          })
           setCurrentLyricIndex(newIndex)
           setCurrentLyrics(lyricsData[newIndex].text)
           lastProcessedIndex.current = newIndex
@@ -285,12 +303,23 @@ function App() {
       })
       
       if (lrcLyrics) {
+        const previewLines = lrcLyrics.split('\n').slice(0, 5)
+        console.log('Using LRCLib lyrics', {
+          track: currentTrack.trackName,
+          artist: currentTrack.artistName,
+          preview: previewLines
+        })
         const lyrics = parseLRC(lrcLyrics, { removeAdLibs })
         console.log('Loaded lyrics:', lyrics.length, 'lines')
         setLyricsData(lyrics)
         setCurrentLyrics('Play the video to start typing!')
       } else {
         console.warn('No lyrics found, using fallback')
+        console.log('Using fallback lyrics', {
+          track: currentTrack.trackName,
+          artist: currentTrack.artistName,
+          preview: RICK_ASTLEY_LRC.split('\n').slice(0, 5)
+        })
         setLyricsError('No lyrics found for this song')
         // Fallback to sample lyrics
         const lyrics = parseLRC(RICK_ASTLEY_LRC, { removeAdLibs })
@@ -301,6 +330,11 @@ function App() {
       console.error('Error fetching lyrics:', error)
       setLyricsError('Failed to load lyrics')
       // Fallback to sample lyrics
+      console.log('Using fallback lyrics due to error', {
+        track: currentTrack.trackName,
+        artist: currentTrack.artistName,
+        preview: RICK_ASTLEY_LRC.split('\n').slice(0, 5)
+      })
       const lyrics = parseLRC(RICK_ASTLEY_LRC, { removeAdLibs })
       setLyricsData(lyrics)
       setCurrentLyrics('Using sample lyrics - Play to start!')
@@ -408,6 +442,13 @@ function App() {
           // If we're at the initial state (-1), advance to first lyric (0) immediately
           if (currentProcessedIndex === -1) {
             const firstLyric = lyricsData[0]?.text || ''
+            const firstLyricTime = lyricsData[0]?.time ?? 0
+            console.log('Lyric sync (initial)', {
+              videoTime: currentTime.toFixed(2),
+              lyricTimestamp: firstLyricTime.toFixed(2),
+              adjustedTime: adjustedTime.toFixed(2),
+              lyric: firstLyric
+            })
             setCurrentLyricIndex(0)
             setCurrentLyrics(firstLyric)
             lastProcessedIndex.current = 0
@@ -446,6 +487,15 @@ function App() {
           // User finished current lyric, advance to next
           const nextLyricIndex = currentProcessedIndex + 1
           if (nextLyricIndex < lyricsData.length) {
+            const nextLyric = lyricsData[nextLyricIndex]
+            const nextLyricTime = nextLyric?.time ?? 0
+            console.log('Lyric sync (advance)', {
+              videoTime: currentTime.toFixed(2),
+              lyricTimestamp: nextLyricTime.toFixed(2),
+              adjustedTime: adjustedTime.toFixed(2),
+              lyricIndex: nextLyricIndex,
+              lyric: nextLyric?.text || ''
+            })
             setCurrentLyricIndex(nextLyricIndex)
             setCurrentLyrics(lyricsData[nextLyricIndex].text)
             lastProcessedIndex.current = nextLyricIndex
