@@ -33,11 +33,29 @@ interface YouTubeProxyResponse {
 }
 
 export class YouTubeService {
-  private readonly searchEndpoint: string;
+  private readonly searchEndpoints: string[];
 
   constructor() {
-    const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
-    this.searchEndpoint = `${apiBase}/api/youtube/search`;
+    const configuredBase = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+    const endpoints = new Set<string>();
+
+    if (configuredBase) {
+      endpoints.add(`${configuredBase}/api/youtube/search`);
+    }
+
+    // Same-origin (relative) endpoint works in production and via Vite proxy in dev
+    endpoints.add('/api/youtube/search');
+
+    // Explicit same-origin absolute URL (avoids issues when fetch requires absolute URLs)
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin.replace(/\/$/, '');
+      endpoints.add(`${origin}/api/youtube/search`);
+    }
+
+    // Dev fallback: direct to local proxy in case Vite proxy isn't configured
+    endpoints.add('http://localhost:8787/api/youtube/search');
+
+    this.searchEndpoints = Array.from(endpoints);
   }
 
   async searchVideos(query: string, maxResults: number = 10): Promise<YouTubeSearchResult[]> {
@@ -46,28 +64,50 @@ export class YouTubeService {
         q: query,
         maxResults: Math.min(Math.max(maxResults, 1), 10).toString()
       });
+      let lastNetworkError: unknown = null;
 
-      const response = await fetch(`${this.searchEndpoint}?${searchParams.toString()}`);
-      
-      if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error('YouTube API quota exceeded or server API key misconfigured');
+      for (const endpoint of this.searchEndpoints) {
+        let response: Response;
+
+        try {
+          response = await fetch(`${endpoint}?${searchParams.toString()}`);
+        } catch (networkError) {
+          lastNetworkError = networkError;
+          console.warn(`YouTube search attempt failed for ${endpoint}:`, networkError);
+          continue;
         }
-        throw new Error(`YouTube API error: ${response.status} ${response.statusText}`);
+
+        if (!response.ok) {
+          if (response.status === 403) {
+            throw new Error('YouTube API quota exceeded or server API key misconfigured');
+          }
+
+          if (response.status === 503) {
+            throw new Error('YouTube proxy is not configured with an API key. Set YOUTUBE_API_KEY on the server.');
+          }
+
+          const body = await response.text();
+          throw new Error(`YouTube API error: ${response.status} ${response.statusText}${body ? ` - ${body}` : ''}`);
+        }
+
+        const data: YouTubeProxyResponse = await response.json();
+
+        return data.items.map(item => ({
+          videoId: item.videoId,
+          title: item.title,
+          channelTitle: item.channelTitle,
+          description: item.description,
+          thumbnails: item.thumbnails,
+          publishedAt: item.publishedAt,
+          duration: item.duration
+        }));
       }
 
-      const data: YouTubeProxyResponse = await response.json();
-
-      return data.items.map(item => ({
-        videoId: item.videoId,
-        title: item.title,
-        channelTitle: item.channelTitle,
-        description: item.description,
-        thumbnails: item.thumbnails,
-        publishedAt: item.publishedAt,
-        duration: item.duration
-      }));
-
+      const fallbackMessage = 'Unable to reach the YouTube search proxy. If you are running locally, start it with `YOUTUBE_API_KEY=your-key npm run server`.';
+      if (lastNetworkError instanceof Error) {
+        throw new Error(`${fallbackMessage} (${lastNetworkError.message})`);
+      }
+      throw new Error(fallbackMessage);
     } catch (error) {
       console.error('YouTube search failed:', error);
       throw error;

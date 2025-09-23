@@ -62,6 +62,7 @@ function App() {
   const globalInputRef = useRef<HTMLInputElement | null>(null)
   const previousOffsetRef = useRef<number>(syncOffset)
   const isWaitingForTypingRef = useRef<boolean>(false)
+  const syncOffsetRef = useRef<number>(syncOffset)
 
   // Keep refs updated with state changes
   useEffect(() => {
@@ -71,6 +72,10 @@ function App() {
   useEffect(() => {
     isWaitingForTypingRef.current = isWaitingForTyping
   }, [isWaitingForTyping])
+
+  useEffect(() => {
+    syncOffsetRef.current = syncOffset
+  }, [syncOffset])
 
   // Check if typing is complete and resume video
   useEffect(() => {
@@ -363,13 +368,14 @@ function App() {
 
     syncIntervalRef.current = window.setInterval(() => {
       if (playerRef.current && lyricsData.length > 0) {
+        const offset = syncOffsetRef.current
         const currentTime = playerRef.current.getCurrentTime()
         setVideoTime(currentTime) // Update video time for debug panel
         // Add 300ms buffer - advance lyrics 300ms before actual timestamp
         const LYRIC_ADVANCE_BUFFER = 0.3
         // Positive offset = delay lyrics (they appear later in video time)
         // So subtract offset to get the effective lyric lookup time
-        const adjustedTime = currentTime + LYRIC_ADVANCE_BUFFER - syncOffset
+        const adjustedTime = currentTime + LYRIC_ADVANCE_BUFFER - offset
         const newIndex = getCurrentLyricIndex(lyricsData, adjustedTime)
         
         // Update player state
@@ -413,14 +419,14 @@ function App() {
             // Use the same adjusted time as lyric selection
             // Pause if adjusted time reaches next lyric and user hasn't finished current
             if (shouldPause) {
-              console.log('Pausing at timestamp - unfinished typing', {
-                currentTime,
-                syncOffset,
-                adjustedTime,
-                nextLyricTime,
-                timeUntilNext: nextLyricTime - adjustedTime,
-                typedLength: currentTypedText.length,
-                lyricLength: currentLyricText.length,
+            console.log('Pausing at timestamp - unfinished typing', {
+              currentTime,
+              syncOffset: offset,
+              adjustedTime,
+              nextLyricTime,
+              timeUntilNext: nextLyricTime - adjustedTime,
+              typedLength: currentTypedText.length,
+              lyricLength: currentLyricText.length,
                 currentIndex
               })
               playerRef.current.pauseVideo()
