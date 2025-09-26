@@ -521,6 +521,8 @@ function App() {
     setAccuracy(100)
     setTime(0)
     setIsWaitingForTyping(false)
+    setCurrentLyricIndex(-1)
+    setCurrentLyrics("Click play to start...")
     lastProcessedIndex.current = -1
     lyricStartTime.current = null
     typedTextRef.current = ''
