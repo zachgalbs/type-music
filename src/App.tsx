@@ -17,7 +17,7 @@ import { youtubeService } from './services/youtubeService'
 
 function App() {
   const sanitizeOffset = (value: number) => {
-    const clamped = Math.min(3, Math.max(-3, value))
+    const clamped = Math.min(10, Math.max(-10, value))
     return Math.round(clamped * 10) / 10
   }
 
@@ -200,9 +200,10 @@ function App() {
         return
       }
       
-      // If typing in an input/textarea, don't intercept
+      // If typing in an input/textarea, don't intercept (except for sync offset shortcuts)
       const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      const isSyncOffsetKey = e.code === 'BracketLeft' || e.code === 'BracketRight'
+      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !isSyncOffsetKey) {
         return
       }
       
@@ -527,12 +528,14 @@ function App() {
       window.clearTimeout(pauseTimeoutRef.current)
       pauseTimeoutRef.current = null
     }
+
+    // Reset the YouTube video to the beginning
+    if (playerRef.current) {
+      playerRef.current.seekTo(0)
+      playerRef.current.pauseVideo()
+    }
   }
 
-  const handleRefreshLyrics = () => {
-    lyricsService.clearCache()
-    fetchLyrics()
-  }
 
   const searchAndLoadTrack = async (track: { trackName: string; artistName: string }) => {
     setCurrentTrack(track)
@@ -650,11 +653,9 @@ function App() {
             }}
           />
           
-          <ActionButtons 
+          <ActionButtons
             onReset={handleReset}
             onSearchOpen={() => setIsSearchOpen(true)}
-            onRefreshLyrics={handleRefreshLyrics}
-            isLoadingLyrics={isLoadingLyrics}
             removeAdLibs={removeAdLibs}
             onAdLibToggle={handleAdLibToggle}
             syncOffset={syncOffset}

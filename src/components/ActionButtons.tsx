@@ -3,8 +3,6 @@ import type { ChangeEvent } from 'react'
 interface ActionButtonsProps {
   onReset: () => void
   onSearchOpen: () => void
-  onRefreshLyrics: () => void
-  isLoadingLyrics?: boolean
   removeAdLibs: boolean
   onAdLibToggle: (enabled: boolean) => void
   syncOffset: number
@@ -14,14 +12,12 @@ interface ActionButtonsProps {
 export default function ActionButtons({
   onReset,
   onSearchOpen,
-  onRefreshLyrics,
-  isLoadingLyrics,
   removeAdLibs,
   onAdLibToggle,
   syncOffset,
   onSyncOffsetChange
 }: ActionButtonsProps) {
-  const clampOffset = (value: number) => Math.min(3, Math.max(-3, value))
+  const clampOffset = (value: number) => Math.min(10, Math.max(-10, value))
   const roundOffset = (value: number) => Math.round(value * 10) / 10
 
   const handleSliderChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -44,20 +40,13 @@ export default function ActionButtons({
           onClick={onReset}
           className="bg-red-900 hover:bg-red-800 text-gray-100 px-6 py-2 rounded-lg font-medium transition-colors border border-red-800"
         >
-          Reset Test
-        </button>
-        <button
-          onClick={onRefreshLyrics}
-          disabled={isLoadingLyrics}
-          className="bg-green-900 hover:bg-green-800 disabled:bg-gray-800 text-gray-100 px-6 py-2 rounded-lg font-medium transition-colors border border-green-800"
-        >
-          {isLoadingLyrics ? 'Loading...' : 'Refresh Lyrics'}
+          Reset
         </button>
         <button
           onClick={onSearchOpen}
           className="bg-blue-900 hover:bg-blue-800 text-gray-100 px-6 py-2 rounded-lg font-medium transition-colors border border-blue-800"
         >
-          Search New Song
+          New Song
         </button>
       </div>
 
@@ -84,8 +73,8 @@ export default function ActionButtons({
         </div>
         <input
           type="range"
-          min={-3}
-          max={3}
+          min={-10}
+          max={10}
           step={0.1}
           value={syncOffset}
           onChange={handleSliderChange}

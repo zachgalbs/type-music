@@ -75,24 +75,29 @@ const TypingInput = forwardRef<HTMLInputElement, TypingInputProps>(({ targetText
         typedTextLength: typedText.length
       })
     }
-    
+
     // Don't prevent default for modifier key combinations - let them pass through
     // EXCEPT for Alt+Backspace which we want to handle for word deletion
     if ((e.ctrlKey || e.metaKey) || (e.altKey && e.key !== 'Backspace')) {
       return // Let browser handle shortcuts like Cmd+R
     }
-    
+
     // Don't prevent default for function keys
     if (e.key.startsWith('F') && e.key.length === 2) {
       return
     }
-    
+
     // Don't prevent default for navigation keys
     const navigationKeys = ['Tab', 'Escape', 'Enter', 'Home', 'End', 'PageUp', 'PageDown']
     if (navigationKeys.includes(e.key)) {
       return
     }
-    
+
+    // Don't prevent default for sync offset shortcuts - let them bubble up to global handler
+    if (e.key === '[' || e.key === ']') {
+      return
+    }
+
     // Now prevent default for typing keys only
     e.preventDefault()
     
