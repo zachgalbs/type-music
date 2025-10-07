@@ -17,7 +17,7 @@ import { youtubeService } from './services/youtubeService'
 
 function App() {
   const sanitizeOffset = (value: number) => {
-    const clamped = Math.min(20, Math.max(-20, value))
+    const clamped = Math.min(30, Math.max(-30, value))
     return Math.round(clamped * 10) / 10
   }
 
